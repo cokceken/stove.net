@@ -2,6 +2,7 @@ using System.Net;
 using Stove.Net.Http;
 using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
+using Stove.Net.Redis;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Integration.Setup;
 using Xunit;
@@ -9,13 +10,13 @@ using Xunit;
 namespace Stove.Net.Tests.Integration.Tests;
 
 /// <summary>
-/// Integration tests combining HTTP + PostgreSQL + Kafka systems.
-/// Validates end-to-end flows through a real API, database, and message broker.
+/// Integration tests combining HTTP + PostgreSQL + Kafka + Redis systems.
+/// Validates end-to-end flows through a real API, database, message broker, and cache.
 /// </summary>
 public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationFixture>
 {
     [Fact]
-    public async Task Should_create_order_persist_to_database_and_publish_event()
+    public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {
         await fixture.Stove.Validate(async s =>
         {
@@ -58,6 +59,16 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
                 await kafka.ShouldBePublished<OrderCreatedEvent>(
                     "order-events",
                     e => e.ProductName == "Widget" && e.Quantity == 5);
+            });
+
+            await s.Redis(async redis =>
+            {
+                await redis.GetAsync<Order>($"order:{createdOrder!.Id}", cached =>
+                {
+                    Assert.NotNull(cached);
+                    Assert.Equal("Widget", cached.ProductName);
+                    Assert.Equal(5, cached.Quantity);
+                });
             });
         });
     }
@@ -107,6 +118,46 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
                         Assert.Equal("Gadget", order.ProductName);
                         Assert.Equal(3, order.Quantity);
                     });
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Should_remove_cached_order_on_delete()
+    {
+        await fixture.Stove.Validate(async s =>
+        {
+            Order? createdOrder = null;
+
+            await s.Http(async http =>
+            {
+                await http.PostAsync<Order>("/api/orders",
+                    body: new CreateOrderRequest("Disposable", 1),
+                    validate: order => { createdOrder = order; });
+            });
+
+            Assert.NotNull(createdOrder);
+
+            // Verify cached
+            await s.Redis(async redis =>
+            {
+                await redis.ShouldExist($"order:{createdOrder!.Id}");
+            });
+
+            // Delete the order
+            await s.Http(async http =>
+            {
+                await http.DeleteAsync($"/api/orders/{createdOrder!.Id}",
+                    validate: response =>
+                    {
+                        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+                    });
+            });
+
+            // Verify cache evicted
+            await s.Redis(async redis =>
+            {
+                await redis.ShouldNotExist($"order:{createdOrder!.Id}");
             });
         });
     }

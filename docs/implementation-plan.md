@@ -131,7 +131,7 @@ public async Task Should_create_order()
 > Goal: Expand supported infrastructure.
 
 - ✅ **Stove.Net.Kafka** — Publish/consume Kafka messages (Testcontainers.Kafka + Confluent.Kafka)
-- **Stove.Net.Redis** — Redis assertions (Testcontainers.Redis)
+- ✅ **Stove.Net.Redis** — Redis assertions (Testcontainers.Redis + StackExchange.Redis)
 - **Stove.Net.WireMock** — External API mocking via WireMock.Net
 - **Stove.Net.MongoDb** — MongoDB support
 

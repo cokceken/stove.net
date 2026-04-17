@@ -47,6 +47,11 @@ public class HttpOnlyFixture : StoveFixture<Program>
             {
                 BootstrapServers = "localhost:9092"
             });
+
+            // Remove Redis registration (no Redis container in HTTP-only tests)
+            var existingRedis = services.FirstOrDefault(d =>
+                d.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
+            if (existingRedis != null) services.Remove(existingRedis);
         });
     }
 

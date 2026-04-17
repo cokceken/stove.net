@@ -3,14 +3,15 @@ using Stove.Net.Core;
 using Stove.Net.Http;
 using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
+using Stove.Net.Redis;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Xunit;
 
 namespace Stove.Net.Tests.Integration.Setup;
 
 /// <summary>
-/// Full integration fixture: HTTP + PostgreSQL + Kafka (Testcontainers).
-/// Boots the ExampleApp backed by a real PostgreSQL database and Kafka broker.
+/// Full integration fixture: HTTP + PostgreSQL + Kafka + Redis (Testcontainers).
+/// Boots the ExampleApp backed by real PostgreSQL, Kafka, and Redis containers.
 /// </summary>
 public class IntegrationFixture : StoveFixture<Program>
 {
@@ -33,6 +34,14 @@ public class IntegrationFixture : StoveFixture<Program>
                 {
                     new KeyValuePair<string, string>(
                         "Kafka:BootstrapServers", bootstrapServers)
+                };
+            })
+            .WithRedis(opts =>
+            {
+                opts.ConfigureExposedConfiguration = connectionString => new[]
+                {
+                    new KeyValuePair<string, string>(
+                        "Redis:ConnectionString", connectionString)
                 };
             });
     }

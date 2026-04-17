@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Confluent.Kafka;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 
 namespace Stove.Net.Tests.ExampleApp;
 
@@ -10,18 +12,44 @@ public class OrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ProducerConfig _kafkaConfig;
+    private readonly IDatabase? _redis;
 
-    public OrdersController(AppDbContext db, ProducerConfig kafkaConfig)
+    public OrdersController(
+        AppDbContext db,
+        ProducerConfig kafkaConfig,
+        IConnectionMultiplexer? redis = null)
     {
         _db = db;
         _kafkaConfig = kafkaConfig;
+        _redis = redis?.GetDatabase();
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)
     {
+        // Try Redis cache first
+        if (_redis != null)
+        {
+            var cached = await _redis.StringGetAsync($"order:{id}");
+            if (cached.HasValue)
+            {
+                var cachedOrder = JsonSerializer.Deserialize<Order>(cached.ToString());
+                return Ok(cachedOrder);
+            }
+        }
+
         var order = await _db.Orders.FindAsync(id);
-        return order is null ? NotFound() : Ok(order);
+        if (order is null) return NotFound();
+
+        // Cache the result
+        if (_redis != null)
+        {
+            var json = JsonSerializer.Serialize(order);
+            await _redis.StringSetAsync($"order:{order.Id}", json);
+            await _redis.KeyExpireAsync($"order:{order.Id}", TimeSpan.FromMinutes(5));
+        }
+
+        return Ok(order);
     }
 
     [HttpGet]
@@ -44,12 +72,20 @@ public class OrdersController : ControllerBase
         _db.Orders.Add(order);
         await _db.SaveChangesAsync();
 
+        // Cache in Redis
+        if (_redis != null)
+        {
+            var json = JsonSerializer.Serialize(order);
+            await _redis.StringSetAsync($"order:{order.Id}", json);
+            await _redis.KeyExpireAsync($"order:{order.Id}", TimeSpan.FromMinutes(5));
+        }
+
         // Publish event to Kafka
         try
         {
             using var producer = new ProducerBuilder<string?, string>(_kafkaConfig).Build();
             var @event = new OrderCreatedEvent(order.Id, order.ProductName, order.Quantity, order.Status);
-            var value = System.Text.Json.JsonSerializer.Serialize(@event);
+            var value = JsonSerializer.Serialize(@event);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await producer.ProduceAsync("order-events",
                 new Message<string?, string> { Key = order.Id.ToString(), Value = value }, cts.Token);
@@ -71,6 +107,10 @@ public class OrdersController : ControllerBase
 
         _db.Orders.Remove(order);
         await _db.SaveChangesAsync();
+
+        // Remove from cache
+        if (_redis != null)
+            await _redis.KeyDeleteAsync($"order:{id}");
 
         return NoContent();
     }

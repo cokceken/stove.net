@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 using Stove.Net.Tests.ExampleApp;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +16,13 @@ builder.Services.AddSingleton(sp =>
     {
         BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092"
     };
+});
+
+// Register Redis connection lazily — config is resolved at service resolution time
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return ConnectionMultiplexer.Connect(config["Redis:ConnectionString"]!);
 });
 
 var app = builder.Build();
