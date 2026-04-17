@@ -11,6 +11,7 @@ namespace Stove.Net.Tests.Http.Setup;
 /// <summary>
 /// Fixture that boots the ExampleApp with only the HTTP system.
 /// PostgreSQL is replaced with an in-memory database so no container is needed.
+/// Kafka is stubbed out with a dummy config since no broker is available.
 /// </summary>
 public class HttpOnlyFixture : StoveFixture<Program>
 {
@@ -37,6 +38,15 @@ public class HttpOnlyFixture : StoveFixture<Program>
             // Replace with in-memory database
             services.AddDbContext<AppDbContext>(opts =>
                 opts.UseInMemoryDatabase("StoveHttpTests"));
+
+            // Provide a dummy Kafka ProducerConfig (no broker in HTTP-only tests)
+            var existingKafka = services.FirstOrDefault(d =>
+                d.ServiceType == typeof(Confluent.Kafka.ProducerConfig));
+            if (existingKafka != null) services.Remove(existingKafka);
+            services.AddSingleton(new Confluent.Kafka.ProducerConfig
+            {
+                BootstrapServers = "localhost:9092"
+            });
         });
     }
 

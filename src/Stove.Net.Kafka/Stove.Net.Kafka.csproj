@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Stove.Net.Kafka</RootNamespace>
+        <Description>Kafka system for Stove.Net — Testcontainers-backed Kafka publish/consume assertions for e2e testing.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Stove.Net.Core\Stove.Net.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Testcontainers.Kafka" Version="4.11.0" />
+        <PackageReference Include="Confluent.Kafka" Version="2.8.0" />
+    </ItemGroup>
+
+</Project>

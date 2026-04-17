@@ -1,3 +1,4 @@
+using Confluent.Kafka;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,8 +9,13 @@ namespace Stove.Net.Tests.ExampleApp;
 public class OrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ProducerConfig _kafkaConfig;
 
-    public OrdersController(AppDbContext db) => _db = db;
+    public OrdersController(AppDbContext db, ProducerConfig kafkaConfig)
+    {
+        _db = db;
+        _kafkaConfig = kafkaConfig;
+    }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)
@@ -37,6 +43,22 @@ public class OrdersController : ControllerBase
 
         _db.Orders.Add(order);
         await _db.SaveChangesAsync();
+
+        // Publish event to Kafka
+        try
+        {
+            using var producer = new ProducerBuilder<string?, string>(_kafkaConfig).Build();
+            var @event = new OrderCreatedEvent(order.Id, order.ProductName, order.Quantity, order.Status);
+            var value = System.Text.Json.JsonSerializer.Serialize(@event);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await producer.ProduceAsync("order-events",
+                new Message<string?, string> { Key = order.Id.ToString(), Value = value }, cts.Token);
+            producer.Flush(TimeSpan.FromSeconds(5));
+        }
+        catch
+        {
+            // Kafka publish failure shouldn't break order creation
+        }
 
         return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
     }

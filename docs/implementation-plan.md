@@ -8,12 +8,15 @@ Create a .NET port of [Trendyol/stove](https://github.com/Trendyol/stove), a Kot
 
 | Decision | Choice |
 |---|---|
-| Test framework | xUnit (IAsyncLifetime for lifecycle) |
+| Test framework | xUnit v3 (IAsyncLifetime, MTP runner, ValueTask) |
 | App hosting | WebApplicationFactory\<T\> in-process (container adapter later) |
 | Initial components | PostgreSQL + HTTP client |
-| Assertions | Framework-agnostic (xUnit built-in Assert, or users bring Shouldly, etc.) |
-| Package structure | Multi-package from v0.1 (Core, PostgreSql, Http) |
+| Assertions | Framework-agnostic — NO FluentAssertions; xUnit built-in Assert.* or users bring their own |
+| Package structure | Multi-package from v0.1 (Core, PostgreSql, Http, Xunit) |
 | .NET version | .NET 10 (current project target) |
+| HTTP API style | All verbs return `HttpClientSystem` for chaining; data extraction via validate callback closures |
+| HttpClient wiring | Explicit — users call `SetHttpClient()` themselves, no magic auto-injection |
+| xUnit version | v3 only — no legacy v2 support |
 
 ## Architecture Overview
 
@@ -56,25 +59,37 @@ public interface IAfterRunAware
 
 ```csharp
 // === SETUP (once per test suite in a shared fixture) ===
-await Stove.Create()
-    .WithHttpClient(opts => opts.BaseUrl = "http://localhost:5000")
-    .WithPostgreSql(opts => {
-        opts.Cleanup = async db => await db.ExecuteAsync("TRUNCATE orders, users");
-    })
-    .WithWebApplication<Program>()
-    .RunAsync();
+public class MyFixture : StoveFixture<Program>
+{
+    protected override StoveBuilder Configure(StoveBuilder builder)
+        => builder
+            .WithHttpClient()
+            .WithPostgreSql(opts =>
+            {
+                opts.ConfigureExposedConfiguration = cs => new[]
+                {
+                    new KeyValuePair<string, string>("ConnectionStrings:Default", cs)
+                };
+            });
+
+    public override async ValueTask InitializeAsync()
+    {
+        await base.InitializeAsync();
+        Stove.GetSystem<HttpClientSystem>().SetHttpClient(CreateClient());
+    }
+}
 
 // === TEST ===
 [Fact]
 public async Task Should_create_order()
 {
-    await stove.Validate(async s =>
+    await _fixture.Stove.Validate(async s =>
     {
         await s.Http(async http =>
         {
-            await http.PostAndExpect<Order>("/orders", createOrderRequest, response =>
+            await http.PostAsync<Order>("/orders", createOrderRequest, order =>
             {
-                Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+                Assert.NotNull(order);
             });
         });
 
@@ -92,27 +107,30 @@ public async Task Should_create_order()
 
 ## Versioning & Milestones
 
-### v0.1 — Foundation + Core DSL
+### v0.1 — Foundation + Core DSL ✅ DONE
 > Goal: A working e2e test that boots an ASP.NET app, starts a Postgres container, and validates an HTTP call + DB state.
 
-- **Stove.Net.Core** — Stove orchestrator, IPluggedSystem, lifecycle management, builder DSL
-- **Stove.Net.Http** — HTTP system wrapping HttpClient (GET/POST/PUT/DELETE with typed responses)
-- **Stove.Net.PostgreSql** — PostgreSQL system using Testcontainers.PostgreSql (shouldQuery, shouldExecute)
-- **Stove.Net.Xunit** — StoveFixture base class implementing IAsyncLifetime
-- **Example project** — A minimal ASP.NET + EF Core app with a Stove.Net test suite
+- ✅ **Stove.Net.Core** — Stove orchestrator, IPluggedSystem, lifecycle management, builder DSL
+- ✅ **Stove.Net.Http** — HTTP system wrapping HttpClient (GET/POST/PUT/DELETE/PATCH with typed + raw overloads, all chainable)
+- ✅ **Stove.Net.PostgreSql** — PostgreSQL system using Testcontainers.PostgreSql (ShouldQuery, ShouldExecute, ShouldQueryScalar)
+- ✅ **Stove.Net.Xunit** — StoveFixture base class implementing IAsyncLifetime (xUnit v3, ValueTask)
+- ✅ **Test projects** — Per-system smoke tests (Http, PostgreSql) + full integration tests (Http+PostgreSql)
+- ✅ **Example app** — Minimal ASP.NET + EF Core Orders API
 
-### v0.2 — Polish & DI Bridge
+### v0.2 — Polish & DI Bridge ✅ DONE
 > Goal: Enable `using<TService>()` pattern and cleanup/migration support.
+> Note: Most of v0.2 is covered by WebApplicationFactory's built-in DI access.
 
-- Bridge system — access app's DI container from tests (`using<TService>(svc => ...)`)
-- Migration support — run SQL/EF migrations before tests
-- Cleanup hooks — per-test and per-suite cleanup strategies
-- Configuration exposure — auto-inject container connection strings into app config
+- ✅ DI bridge — `StoveFixture.Services` exposes the app's `IServiceProvider` directly; no separate `Using<T>()` needed
+- ✅ Migration support — `PostgreSqlSystemOptions.MigrationSql` for raw SQL; fixtures can call `db.Database.EnsureCreatedAsync()`
+- ✅ Cleanup hooks — `IPluggedSystem.CleanupAsync()` + `PostgreSqlSystemOptions.Cleanup` callback
+- ✅ Configuration exposure — `IExposesConfiguration` + `CollectConfiguration()` auto-injects container connection strings into app config
+- ✅ Web host customization — `ConfigureWebHost(IWebHostBuilder)` virtual hook for service replacement (e.g., swap DB provider)
 
-### v0.3 — More Components
+### v0.3 — More Components (In Progress)
 > Goal: Expand supported infrastructure.
 
-- **Stove.Net.Kafka** — Publish/consume Kafka messages (Testcontainers.Kafka)
+- ✅ **Stove.Net.Kafka** — Publish/consume Kafka messages (Testcontainers.Kafka + Confluent.Kafka)
 - **Stove.Net.Redis** — Redis assertions (Testcontainers.Redis)
 - **Stove.Net.WireMock** — External API mocking via WireMock.Net
 - **Stove.Net.MongoDb** — MongoDB support
@@ -140,7 +158,7 @@ public async Task Should_create_order()
 
 ## Implementation Details for v0.1
 
-### Solution Structure
+### Solution Structure (Current)
 
 ```
 Stove.Net.sln
@@ -157,37 +175,40 @@ Stove.Net.sln
 │   │   └── Exceptions/
 │   │       └── SystemNotRegisteredException.cs
 │   ├── Stove.Net.Http/
-│   │   ├── HttpClientSystem.cs             — HTTP operations (get, post, put, delete)
-│   │   ├── HttpClientSystemOptions.cs      — Configuration options
+│   │   ├── HttpClientSystem.cs             — HTTP verbs (GET/POST/PUT/DELETE/PATCH, raw + typed)
 │   │   └── StoveHttpExtensions.cs          — .WithHttpClient() + .Http() extensions
 │   ├── Stove.Net.PostgreSql/
 │   │   ├── PostgreSqlSystem.cs             — DB query/execute assertions
 │   │   ├── PostgreSqlSystemOptions.cs      — Configuration options
 │   │   └── StovePostgreSqlExtensions.cs    — .WithPostgreSql() + .PostgreSql() extensions
 │   └── Stove.Net.Xunit/
-│       └── StoveFixture.cs                 — IAsyncLifetime + WebApplicationFactory integration
+│       └── StoveFixture.cs                 — IAsyncLifetime + WebApplicationFactory + CreateClient()
 ├── tests/
-│   ├── Stove.Net.Tests.ExampleApp/         — Minimal ASP.NET API + EF Core (separate project)
+│   ├── Stove.Net.Tests.ExampleApp/         — Minimal ASP.NET API + EF Core
 │   │   ├── Program.cs
 │   │   ├── OrdersController.cs
-│   │   ├── Order.cs
-│   │   ├── CreateOrderRequest.cs
-│   │   └── AppDbContext.cs
-│   └── Stove.Net.Tests.Example/            — E2E test project
-│       ├── Setup/
-│       │   └── ExampleStoveFixture.cs      — Fixture configuration
-│       └── Tests/
-│           └── OrderTests.cs               — Example e2e tests
+│   │   ├── Order.cs, CreateOrderRequest.cs, AppDbContext.cs
+│   ├── Stove.Net.Tests.Http/               — HTTP-only smoke tests (InMemory DB, no containers)
+│   │   ├── Setup/HttpOnlyFixture.cs
+│   │   └── Tests/HttpTests.cs
+│   ├── Stove.Net.Tests.PostgreSql/         — PostgreSQL-only smoke tests (container, no app)
+│   │   ├── Setup/PostgreSqlOnlyFixture.cs
+│   │   └── Tests/PostgreSqlTests.cs
+│   └── Stove.Net.Tests.Integration/        — Full e2e tests (HTTP + PostgreSQL container)
+│       ├── Setup/IntegrationFixture.cs
+│       └── Tests/OrderTests.cs
 ```
 
 ### Key NuGet Dependencies
 
 | Package | Project | Purpose |
 |---|---|---|
-| `Testcontainers.PostgreSql` | Stove.Net.PostgreSql | Postgres container |
-| `Npgsql` | Stove.Net.PostgreSql | DB queries |
-| `Microsoft.AspNetCore.Mvc.Testing` | Stove.Net.Xunit | WebApplicationFactory |
-| `xunit` | Stove.Net.Xunit | Test framework integration |
+| `Testcontainers.PostgreSql` 4.11.0 | Stove.Net.PostgreSql | Postgres container |
+| `Npgsql` 10.0.2 | Stove.Net.PostgreSql | DB queries |
+| `Microsoft.AspNetCore.Mvc.Testing` 10.0.6 | Stove.Net.Xunit | WebApplicationFactory |
+| `xunit.v3.extensibility.core` 3.2.2 | Stove.Net.Xunit | xUnit v3 integration (library) |
+| `xunit.v3` 3.2.2 | Test projects | xUnit v3 runner (test exes) |
+| `xunit.runner.visualstudio` 3.1.5 | Test projects | Rider/VS test discovery |
 
 ### Chainable Extension Method Pattern
 
@@ -197,9 +218,13 @@ Every system method returns the system itself for chaining:
 await s.Http(async http =>
 {
     await http
-        .Post("/orders", body)
-        .Get<Order>("/orders/1", order => Assert.Equal("CONFIRMED", order.Status))
-        .Delete("/orders/1");
+        .PostAsync<Order>("/orders", body, order => Assert.NotNull(order))
+        .Result  // Task<HttpClientSystem>
+        ;
+    // Or step-by-step:
+    await http.PostAsync("/orders", body);
+    await http.GetAsync<Order>("/orders/1", order => Assert.Equal("CONFIRMED", order.Status));
+    await http.DeleteAsync("/orders/1");
 });
 ```
 
@@ -214,8 +239,8 @@ await s.Http(async http =>
 | `@StoveDsl` extensions | Extension methods on StoveBuilder |
 | `stove { }` validation block | `stove.Validate(async s => { })` |
 | `postgresql { shouldQuery<T>() }` | `s.PostgreSql(async pg => pg.ShouldQuery<T>())` |
-| `http { get<T>() }` | `s.Http(async http => http.Get<T>())` |
-| `using<TService> { }` | `s.Using<TService>(svc => { })` (v0.2) |
+| `http { get<T>() }` | `s.Http(async http => http.GetAsync<T>())` |
+| `using<TService> { }` | `fixture.Services.GetRequiredService<T>()` |
 | `bridge()` | Built into WebApplicationFactory integration |
 
 ## Notes & Considerations
@@ -224,5 +249,5 @@ await s.Http(async http =>
 2. **Naming**: "Stove.Net" mirrors the .NET convention. NuGet package IDs: `Stove.Net.Core`, `Stove.Net.PostgreSql`, etc.
 3. **C# vs Kotlin DSL gap**: Kotlin has receiver lambdas and infix functions that make DSLs very natural. C# compensates with extension methods, lambda callbacks, and the builder pattern. The DSL won't be identical but should feel idiomatic to C# developers.
 4. **Async-first**: All operations are async (Task-based) since container startup, HTTP calls, and DB queries are inherently async.
-5. **QA-friendly**: The fluent chainable API and behavior-descriptive method names (`ShouldQuery`, `PostAndExpect`) are designed to be readable by QA without deep C# knowledge.
+5. **QA-friendly**: The fluent chainable API and behavior-descriptive method names (`ShouldQuery`, `PostAsync<T>`) are designed to be readable by QA without deep C# knowledge.
 6. **Testcontainers.DotNet**: Already mature with PostgreSQL, Kafka, Redis, MongoDB modules — we wrap rather than reinvent.

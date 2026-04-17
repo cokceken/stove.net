@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stove.Net.Core;
 using Stove.Net.Http;
+using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Xunit;
@@ -8,8 +9,8 @@ using Stove.Net.Xunit;
 namespace Stove.Net.Tests.Integration.Setup;
 
 /// <summary>
-/// Full integration fixture: HTTP + PostgreSQL (Testcontainer).
-/// Boots the ExampleApp backed by a real PostgreSQL database.
+/// Full integration fixture: HTTP + PostgreSQL + Kafka (Testcontainers).
+/// Boots the ExampleApp backed by a real PostgreSQL database and Kafka broker.
 /// </summary>
 public class IntegrationFixture : StoveFixture<Program>
 {
@@ -23,6 +24,15 @@ public class IntegrationFixture : StoveFixture<Program>
                 {
                     new KeyValuePair<string, string>(
                         "ConnectionStrings:DefaultConnection", connectionString)
+                };
+            })
+            .WithKafka(opts =>
+            {
+                opts.TopicsToConsume.Add("order-events");
+                opts.ConfigureExposedConfiguration = bootstrapServers => new[]
+                {
+                    new KeyValuePair<string, string>(
+                        "Kafka:BootstrapServers", bootstrapServers)
                 };
             });
     }

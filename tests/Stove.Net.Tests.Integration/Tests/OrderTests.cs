@@ -1,5 +1,6 @@
 using System.Net;
 using Stove.Net.Http;
+using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Integration.Setup;
@@ -8,25 +9,30 @@ using Xunit;
 namespace Stove.Net.Tests.Integration.Tests;
 
 /// <summary>
-/// Integration tests combining HTTP + PostgreSQL systems.
-/// Validates end-to-end flows through a real API and database.
+/// Integration tests combining HTTP + PostgreSQL + Kafka systems.
+/// Validates end-to-end flows through a real API, database, and message broker.
 /// </summary>
 public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationFixture>
 {
     [Fact]
-    public async Task Should_create_order_and_persist_to_database()
+    public async Task Should_create_order_persist_to_database_and_publish_event()
     {
         await fixture.Stove.Validate(async s =>
         {
+            Order? createdOrder = null;
+
             await s.Http(async http =>
             {
-                await http.PostAsync("/api/orders",
+                await http.PostAsync<Order>("/api/orders",
                     body: new CreateOrderRequest("Widget", 5),
-                    validate: response =>
+                    validate: order =>
                     {
-                        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+                        createdOrder = order;
+                        Assert.Equal("Confirmed", order.Status);
                     });
             });
+
+            Assert.NotNull(createdOrder);
 
             await s.PostgreSql(async pg =>
             {
@@ -45,6 +51,13 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
                         Assert.Equal(5, results[0].Quantity);
                         Assert.Equal("Confirmed", results[0].Status);
                     });
+            });
+
+            await s.Kafka(async kafka =>
+            {
+                await kafka.ShouldBePublished<OrderCreatedEvent>(
+                    "order-events",
+                    e => e.ProductName == "Widget" && e.Quantity == 5);
             });
         });
     }
@@ -70,7 +83,6 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
     {
         await fixture.Stove.Validate(async s =>
         {
-            // Extract the created order via the validate callback
             Order? createdOrder = null;
 
             await s.Http(async http =>
