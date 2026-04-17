@@ -33,11 +33,12 @@ public class HttpTests(HttpOnlyFixture fixture) : IClassFixture<HttpOnlyFixture>
     {
         await fixture.Stove.Validate(async s =>
         {
+            // Extract the created order via the validate callback
             Order? created = null;
 
             await s.Http(async http =>
             {
-                await http.PostAndExpectAsync<Order>("/api/orders",
+                await http.PostAsync<Order>("/api/orders",
                     body: new CreateOrderRequest("HttpTestProduct", 2),
                     validate: order =>
                     {

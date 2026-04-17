@@ -70,11 +70,12 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
     {
         await fixture.Stove.Validate(async s =>
         {
+            // Extract the created order via the validate callback
             Order? createdOrder = null;
 
             await s.Http(async http =>
             {
-                await http.PostAndExpectAsync<Order>("/api/orders",
+                await http.PostAsync<Order>("/api/orders",
                     body: new CreateOrderRequest("Gadget", 3),
                     validate: order =>
                     {
