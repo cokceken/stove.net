@@ -16,7 +16,7 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
 {
     private KafkaContainer? _container;
     private string? _bootstrapServers;
-    private readonly ConcurrentBag<CapturedMessage> _capturedMessages = new();
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<CapturedMessage>> _messagesByTopic = new();
     private CancellationTokenSource? _consumerCts;
     private Task? _consumerTask;
 
@@ -93,12 +93,27 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
         return this;
     }
 
+    // --- Message History ---
+
+    /// <summary>
+    /// Returns the total number of captured messages across all topics.
+    /// </summary>
+    public int CapturedMessageCount => _messagesByTopic.Values.Sum(q => q.Count);
+
+    /// <summary>
+    /// Returns a snapshot of all captured messages grouped by topic.
+    /// Useful for diagnostics and debugging failed assertions.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<CapturedMessage>> GetCapturedMessages() =>
+        _messagesByTopic.ToDictionary(
+            kvp => kvp.Key, IReadOnlyList<CapturedMessage> (kvp) => kvp.Value.ToArray());
+
     // --- Assertions ---
 
     /// <summary>
-    /// Assert that a message matching the predicate was published to a consumed topic.
-    /// The background consumer captures messages; this method polls until a match is found
-    /// or the timeout expires.
+    /// Assert that a message matching the predicate was published to any consumed topic.
+    /// The background consumer captures all messages into a topic-keyed history;
+    /// this method polls the history until a match is found or the timeout expires.
     /// </summary>
     public async Task<KafkaSystem> ShouldBePublished<T>(
         Func<T, bool> predicate,
@@ -109,17 +124,20 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
 
         while (DateTime.UtcNow < deadline)
         {
-            foreach (var msg in _capturedMessages)
+            foreach (var queue in _messagesByTopic.Values)
             {
-                try
+                foreach (var msg in queue)
                 {
-                    var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
-                    if (deserialized != null && predicate(deserialized))
-                        return this;
-                }
-                catch (JsonException)
-                {
-                    // Message doesn't match type — skip
+                    try
+                    {
+                        var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
+                        if (deserialized != null && predicate(deserialized))
+                            return this;
+                    }
+                    catch (JsonException)
+                    {
+                        // Message doesn't deserialize to T — continue scanning
+                    }
                 }
             }
 
@@ -128,11 +146,12 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
 
         throw new InvalidOperationException(
             $"No message of type {typeof(T).Name} matching the predicate was found within {(timeout ?? options.AssertionTimeout).TotalSeconds}s. " +
-            $"Captured {_capturedMessages.Count} message(s) total.");
+            FormatCapturedSummary());
     }
 
     /// <summary>
     /// Assert that a message matching the predicate was published to a specific topic.
+    /// Only scans messages captured on the given topic (O(1) topic lookup).
     /// </summary>
     public async Task<KafkaSystem> ShouldBePublished<T>(
         string topic,
@@ -144,26 +163,40 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
 
         while (DateTime.UtcNow < deadline)
         {
-            foreach (var msg in _capturedMessages.Where(m => m.Topic == topic))
+            if (_messagesByTopic.TryGetValue(topic, out var queue))
             {
-                try
+                foreach (var msg in queue)
                 {
-                    var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
-                    if (deserialized != null && predicate(deserialized))
-                        return this;
-                }
-                catch (JsonException)
-                {
-                    // Message doesn't match type — skip
+                    try
+                    {
+                        var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
+                        if (deserialized != null && predicate(deserialized))
+                            return this;
+                    }
+                    catch (JsonException)
+                    {
+                        // Message doesn't deserialize to T — continue scanning
+                    }
                 }
             }
 
             await Task.Delay(pollInterval);
         }
 
+        var topicCount = _messagesByTopic.TryGetValue(topic, out var q) ? q.Count : 0;
         throw new InvalidOperationException(
             $"No message of type {typeof(T).Name} matching the predicate was found on topic '{topic}' within {(timeout ?? options.AssertionTimeout).TotalSeconds}s. " +
-            $"Captured {_capturedMessages.Count(m => m.Topic == topic)} message(s) on this topic.");
+            $"Topic '{topic}' has {topicCount} message(s). " +
+            FormatCapturedSummary());
+    }
+
+    private string FormatCapturedSummary()
+    {
+        if (_messagesByTopic.IsEmpty)
+            return "No messages were captured on any topic.";
+
+        var topicSummaries = _messagesByTopic.Select(kvp => $"  {kvp.Key}: {kvp.Value.Count} message(s)");
+        return $"Captured messages by topic:\n{string.Join("\n", topicSummaries)}";
     }
 
     // --- Background Consumer ---
@@ -195,7 +228,8 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
                         var result = consumer.Consume(TimeSpan.FromMilliseconds(500));
                         if (result?.Message?.Value != null)
                         {
-                            _capturedMessages.Add(new CapturedMessage(
+                            var queue = _messagesByTopic.GetOrAdd(result.Topic, _ => new ConcurrentQueue<CapturedMessage>());
+                            queue.Enqueue(new CapturedMessage(
                                 result.Topic,
                                 result.Message.Key,
                                 result.Message.Value,
@@ -242,5 +276,5 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
             await _container.DisposeAsync();
     }
 
-    private sealed record CapturedMessage(string Topic, string? Key, string Value, DateTime Timestamp);
+    public sealed record CapturedMessage(string Topic, string? Key, string Value, DateTime Timestamp);
 }
