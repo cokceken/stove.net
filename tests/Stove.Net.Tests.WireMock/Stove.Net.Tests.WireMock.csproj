@@ -12,17 +12,10 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Stove.Net.Core\Stove.Net.Core.csproj" />
-        <ProjectReference Include="..\..\src\Stove.Net.Http\Stove.Net.Http.csproj" />
-        <ProjectReference Include="..\..\src\Stove.Net.Kafka\Stove.Net.Kafka.csproj" />
-        <ProjectReference Include="..\..\src\Stove.Net.PostgreSql\Stove.Net.PostgreSql.csproj" />
-        <ProjectReference Include="..\..\src\Stove.Net.Redis\Stove.Net.Redis.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.WireMock\Stove.Net.WireMock.csproj" />
-        <ProjectReference Include="..\..\src\Stove.Net.Xunit\Stove.Net.Xunit.csproj" />
-        <ProjectReference Include="..\Stove.Net.Tests.ExampleApp\Stove.Net.Tests.ExampleApp.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.6" />
         <PackageReference Include="xunit.v3" Version="3.2.2" />
         <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     </ItemGroup>

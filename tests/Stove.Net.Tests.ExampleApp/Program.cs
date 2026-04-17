@@ -25,6 +25,15 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     return ConnectionMultiplexer.Connect(config["Redis:ConnectionString"]!);
 });
 
+// Register named HttpClient for external notification service
+builder.Services.AddHttpClient("NotificationService", (sp, client) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var baseUrl = config["ExternalApis:NotificationUrl"] ?? "http://localhost:9999";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 var app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));

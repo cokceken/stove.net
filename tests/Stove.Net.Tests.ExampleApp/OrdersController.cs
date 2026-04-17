@@ -13,14 +13,17 @@ public class OrdersController : ControllerBase
     private readonly AppDbContext _db;
     private readonly ProducerConfig _kafkaConfig;
     private readonly IDatabase? _redis;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public OrdersController(
         AppDbContext db,
         ProducerConfig kafkaConfig,
+        IHttpClientFactory httpClientFactory,
         IConnectionMultiplexer? redis = null)
     {
         _db = db;
         _kafkaConfig = kafkaConfig;
+        _httpClientFactory = httpClientFactory;
         _redis = redis?.GetDatabase();
     }
 
@@ -78,6 +81,18 @@ public class OrdersController : ControllerBase
             var json = JsonSerializer.Serialize(order);
             await _redis.StringSetAsync($"order:{order.Id}", json);
             await _redis.KeyExpireAsync($"order:{order.Id}", TimeSpan.FromMinutes(5));
+        }
+
+        // Notify external service
+        try
+        {
+            var client = _httpClientFactory.CreateClient("NotificationService");
+            var notification = new { OrderId = order.Id, order.ProductName, order.Quantity };
+            await client.PostAsJsonAsync("/api/notifications", notification);
+        }
+        catch
+        {
+            // Notification failure shouldn't break order creation
         }
 
         // Publish event to Kafka

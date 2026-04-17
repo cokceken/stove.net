@@ -1,10 +1,12 @@
 using System.Net;
+using Microsoft.AspNetCore.Http;
 using Stove.Net.Http;
 using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
 using Stove.Net.Redis;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Integration.Setup;
+using Stove.Net.WireMock;
 using Xunit;
 
 namespace Stove.Net.Tests.Integration.Tests;
@@ -69,6 +71,11 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
                     Assert.Equal("Widget", cached.ProductName);
                     Assert.Equal(5, cached.Quantity);
                 });
+            });
+
+            await s.WireMock(async wireMock =>
+            {
+                wireMock.ShouldHaveReceived("/api/notifications", HttpMethods.Post);
             });
         });
     }
