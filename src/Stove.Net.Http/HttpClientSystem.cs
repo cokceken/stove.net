@@ -9,9 +9,8 @@ namespace Stove.Net.Http;
 /// All methods return <see cref="HttpClientSystem"/> for chaining.
 /// Use the <c>validate</c> callback to inspect or extract data from responses.
 /// </summary>
-public class HttpClientSystem(HttpClientSystemOptions options) : IPluggedSystem
+public class HttpClientSystem : IPluggedSystem
 {
-    private readonly HttpClientSystemOptions _options = options;
     private HttpClient? _httpClient;
 
     /// <summary>

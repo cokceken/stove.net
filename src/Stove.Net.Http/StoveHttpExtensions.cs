@@ -11,13 +11,9 @@ public static class StoveHttpExtensions
     /// Register an HTTP client system with the Stove builder.
     /// </summary>
     public static StoveBuilder WithHttpClient(
-        this StoveBuilder builder,
-        Action<HttpClientSystemOptions>? configure = null)
+        this StoveBuilder builder)
     {
-        var options = new HttpClientSystemOptions();
-        configure?.Invoke(options);
-
-        var system = new HttpClientSystem(options);
+        var system = new HttpClientSystem();
         builder.WithSystem(system);
         return builder;
     }

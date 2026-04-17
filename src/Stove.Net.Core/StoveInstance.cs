@@ -45,6 +45,11 @@ public sealed class StoveInstance : IAsyncDisposable
     }
 
     /// <summary>
+    /// Returns all registered systems that implement the given interface.
+    /// </summary>
+    public IEnumerable<T> GetSystems<T>() => _systems.Values.OfType<T>();
+
+    /// <summary>
     /// Returns all configuration key-value pairs from systems that implement IExposesConfiguration.
     /// Used by the application host to inject container connection strings, etc.
     /// </summary>

@@ -10,7 +10,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Stove.Net.Core\Stove.Net.Core.csproj" />
-        <ProjectReference Include="..\Stove.Net.Http\Stove.Net.Http.csproj" />
     </ItemGroup>
 
     <ItemGroup>

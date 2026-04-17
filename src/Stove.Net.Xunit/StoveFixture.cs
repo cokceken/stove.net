@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Stove.Net.Core;
-using Stove.Net.Http;
 using Xunit;
 
 namespace Stove.Net.Xunit;
@@ -46,6 +45,15 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime
                                             "WebApplicationFactory is not initialized. Await InitializeAsync() first.");
 
     /// <summary>
+    /// Creates an HttpClient backed by the in-process test server.
+    /// Call this in InitializeAsync() after base.InitializeAsync() to wire
+    /// into HttpClientSystem or any other system that needs it.
+    /// </summary>
+    public HttpClient CreateClient() => _factory?.CreateClient()
+                                         ?? throw new InvalidOperationException(
+                                             "WebApplicationFactory is not initialized. Call base.InitializeAsync() first.");
+
+    /// <summary>
     /// Override to configure which systems (HTTP, PostgreSQL, etc.) to use.
     /// </summary>
     protected abstract StoveBuilder Configure(StoveBuilder builder);
@@ -80,13 +88,6 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime
 
                 ConfigureWebHost(webBuilder);
             });
-
-        // Create the HttpClient and inject it into the HTTP system if registered
-        if (_stove.TryGetSystem<HttpClientSystem>(out var httpSystem))
-        {
-            var httpClient = _factory.CreateClient();
-            httpSystem!.SetHttpClient(httpClient);
-        }
 
         // Notify after-run-aware systems
         using var scope = _factory.Services.CreateScope();

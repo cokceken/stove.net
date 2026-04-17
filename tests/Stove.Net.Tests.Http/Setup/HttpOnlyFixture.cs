@@ -44,6 +44,8 @@ public class HttpOnlyFixture : StoveFixture<Program>
     {
         await base.InitializeAsync();
 
+        Stove.GetSystem<HttpClientSystem>().SetHttpClient(CreateClient());
+
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
