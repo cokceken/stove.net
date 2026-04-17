@@ -1,0 +1,15 @@
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/bin/Debug/net10.0/Stove.Net.PostgreSql.deps.json
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/bin/Debug/net10.0/Stove.Net.PostgreSql.dll
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/bin/Debug/net10.0/Stove.Net.PostgreSql.pdb
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/bin/Debug/net10.0/Stove.Net.Core.dll
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/bin/Debug/net10.0/Stove.Net.Core.pdb
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Net.PostgreSql.csproj.AssemblyReference.cache
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Net.PostgreSql.GeneratedMSBuildEditorConfig.editorconfig
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Net.PostgreSql.AssemblyInfoInputs.cache
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Net.PostgreSql.AssemblyInfo.cs
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Net.PostgreSql.csproj.CoreCompileInputs.cache
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Ne.D458F3B9.Up2Date
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Net.PostgreSql.dll
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/refint/Stove.Net.PostgreSql.dll
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/Stove.Net.PostgreSql.pdb
+/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/obj/Debug/net10.0/ref/Stove.Net.PostgreSql.dll

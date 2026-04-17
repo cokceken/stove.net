@@ -1,0 +1,11 @@
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/bin/Debug/net10.0/Stove.Net.Core.deps.json
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/bin/Debug/net10.0/Stove.Net.Core.dll
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/bin/Debug/net10.0/Stove.Net.Core.pdb
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/Stove.Net.Core.GeneratedMSBuildEditorConfig.editorconfig
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/Stove.Net.Core.AssemblyInfoInputs.cache
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/Stove.Net.Core.AssemblyInfo.cs
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/Stove.Net.Core.csproj.CoreCompileInputs.cache
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/Stove.Net.Core.dll
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/refint/Stove.Net.Core.dll
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/Stove.Net.Core.pdb
+/Users/303626/dev/Stove.Net/src/Stove.Net.Core/obj/Debug/net10.0/ref/Stove.Net.Core.dll

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "dgSpecHash": "6W86RIqbZic=",
+  "success": true,
+  "projectFilePath": "/Users/303626/dev/Stove.Net/src/Stove.Net.PostgreSql/Stove.Net.PostgreSql.csproj",
+  "expectedPackageFiles": [
+    "/Users/303626/.nuget/packages/bouncycastle.cryptography/2.6.2/bouncycastle.cryptography.2.6.2.nupkg.sha512",
+    "/Users/303626/.nuget/packages/docker.dotnet.enhanced/3.131.1/docker.dotnet.enhanced.3.131.1.nupkg.sha512",
+    "/Users/303626/.nuget/packages/docker.dotnet.enhanced.x509/3.131.1/docker.dotnet.enhanced.x509.3.131.1.nupkg.sha512",
+    "/Users/303626/.nuget/packages/microsoft.extensions.dependencyinjection.abstractions/10.0.0/microsoft.extensions.dependencyinjection.abstractions.10.0.0.nupkg.sha512",
+    "/Users/303626/.nuget/packages/microsoft.extensions.logging.abstractions/10.0.0/microsoft.extensions.logging.abstractions.10.0.0.nupkg.sha512",
+    "/Users/303626/.nuget/packages/npgsql/10.0.2/npgsql.10.0.2.nupkg.sha512",
+    "/Users/303626/.nuget/packages/sharpziplib/1.4.2/sharpziplib.1.4.2.nupkg.sha512",
+    "/Users/303626/.nuget/packages/ssh.net/2025.1.0/ssh.net.2025.1.0.nupkg.sha512",
+    "/Users/303626/.nuget/packages/testcontainers/4.11.0/testcontainers.4.11.0.nupkg.sha512",
+    "/Users/303626/.nuget/packages/testcontainers.postgresql/4.11.0/testcontainers.postgresql.4.11.0.nupkg.sha512"
+  ],
+  "logs": []
+}

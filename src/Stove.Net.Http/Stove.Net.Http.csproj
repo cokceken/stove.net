@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Stove.Net.Http</RootNamespace>
+        <Description>HTTP client system for Stove.Net — fluent HTTP assertions for e2e testing.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Stove.Net.Core\Stove.Net.Core.csproj" />
+    </ItemGroup>
+
+</Project>

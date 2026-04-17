@@ -1,0 +1,6 @@
+{
+  "Stove.Net.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/303626\/dev\/Stove.Net\/src\/Stove.Net.Core",
+  "Stove.Net.Http, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/303626\/dev\/Stove.Net\/src\/Stove.Net.Http",
+  "Stove.Net.Tests.ExampleApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/303626\/dev\/Stove.Net\/tests\/Stove.Net.Tests.ExampleApp",
+  "Stove.Net.Xunit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/303626\/dev\/Stove.Net\/src\/Stove.Net.Xunit"
+}

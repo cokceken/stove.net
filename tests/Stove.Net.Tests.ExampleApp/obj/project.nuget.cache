@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "dgSpecHash": "S9ihxykNQ9g=",
+  "success": true,
+  "projectFilePath": "/Users/303626/dev/Stove.Net/tests/Stove.Net.Tests.ExampleApp/Stove.Net.Tests.ExampleApp.csproj",
+  "expectedPackageFiles": [
+    "/Users/303626/.nuget/packages/microsoft.entityframeworkcore/10.0.6/microsoft.entityframeworkcore.10.0.6.nupkg.sha512",
+    "/Users/303626/.nuget/packages/microsoft.entityframeworkcore.abstractions/10.0.6/microsoft.entityframeworkcore.abstractions.10.0.6.nupkg.sha512",
+    "/Users/303626/.nuget/packages/microsoft.entityframeworkcore.analyzers/10.0.6/microsoft.entityframeworkcore.analyzers.10.0.6.nupkg.sha512",
+    "/Users/303626/.nuget/packages/microsoft.entityframeworkcore.relational/10.0.4/microsoft.entityframeworkcore.relational.10.0.4.nupkg.sha512",
+    "/Users/303626/.nuget/packages/npgsql/10.0.2/npgsql.10.0.2.nupkg.sha512",
+    "/Users/303626/.nuget/packages/npgsql.entityframeworkcore.postgresql/10.0.1/npgsql.entityframeworkcore.postgresql.10.0.1.nupkg.sha512"
+  ],
+  "logs": []
+}

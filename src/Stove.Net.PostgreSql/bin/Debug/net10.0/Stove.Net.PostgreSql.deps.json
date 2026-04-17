@@ -1,0 +1,217 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "Stove.Net.PostgreSql/1.0.0": {
+        "dependencies": {
+          "Npgsql": "10.0.2",
+          "Stove.Net.Core": "1.0.0",
+          "Testcontainers.PostgreSql": "4.11.0"
+        },
+        "runtime": {
+          "Stove.Net.PostgreSql.dll": {}
+        }
+      },
+      "BouncyCastle.Cryptography/2.6.2": {
+        "runtime": {
+          "lib/net6.0/BouncyCastle.Cryptography.dll": {
+            "assemblyVersion": "2.0.0.0",
+            "fileVersion": "2.6.2.46322"
+          }
+        }
+      },
+      "Docker.DotNet.Enhanced/3.131.1": {
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        },
+        "runtime": {
+          "lib/net10.0/Docker.DotNet.dll": {
+            "assemblyVersion": "3.131.0.0",
+            "fileVersion": "3.131.1.1"
+          }
+        }
+      },
+      "Docker.DotNet.Enhanced.X509/3.131.1": {
+        "dependencies": {
+          "Docker.DotNet.Enhanced": "3.131.1"
+        },
+        "runtime": {
+          "lib/net10.0/Docker.DotNet.X509.dll": {
+            "assemblyVersion": "3.131.0.0",
+            "fileVersion": "3.131.1.1"
+          }
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.0": {
+        "runtime": {
+          "lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.25.52411"
+          }
+        }
+      },
+      "Microsoft.Extensions.Logging.Abstractions/10.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.0"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.Extensions.Logging.Abstractions.dll": {
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.25.52411"
+          }
+        }
+      },
+      "Npgsql/10.0.2": {
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        },
+        "runtime": {
+          "lib/net10.0/Npgsql.dll": {
+            "assemblyVersion": "10.0.2.0",
+            "fileVersion": "10.0.2.0"
+          }
+        }
+      },
+      "SharpZipLib/1.4.2": {
+        "runtime": {
+          "lib/net6.0/ICSharpCode.SharpZipLib.dll": {
+            "assemblyVersion": "1.4.2.13",
+            "fileVersion": "1.4.2.13"
+          }
+        }
+      },
+      "SSH.NET/2025.1.0": {
+        "dependencies": {
+          "BouncyCastle.Cryptography": "2.6.2",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        },
+        "runtime": {
+          "lib/net9.0/Renci.SshNet.dll": {
+            "assemblyVersion": "2025.1.0.1",
+            "fileVersion": "2025.1.0.1"
+          }
+        }
+      },
+      "Testcontainers/4.11.0": {
+        "dependencies": {
+          "Docker.DotNet.Enhanced": "3.131.1",
+          "Docker.DotNet.Enhanced.X509": "3.131.1",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0",
+          "SSH.NET": "2025.1.0",
+          "SharpZipLib": "1.4.2"
+        },
+        "runtime": {
+          "lib/net10.0/Testcontainers.dll": {
+            "assemblyVersion": "4.11.0.0",
+            "fileVersion": "4.11.0.0"
+          }
+        }
+      },
+      "Testcontainers.PostgreSql/4.11.0": {
+        "dependencies": {
+          "Testcontainers": "4.11.0"
+        },
+        "runtime": {
+          "lib/net10.0/Testcontainers.PostgreSql.dll": {
+            "assemblyVersion": "4.11.0.0",
+            "fileVersion": "4.11.0.0"
+          }
+        }
+      },
+      "Stove.Net.Core/1.0.0": {
+        "runtime": {
+          "Stove.Net.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Stove.Net.PostgreSql/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "BouncyCastle.Cryptography/2.6.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-7oWOcvnntmMKNzDLsdxAYqApt+AjpRpP2CShjMfIa3umZ42UQMvH0tl1qAliYPNYO6vTdcGMqnRrCPmsfzTI1w==",
+      "path": "bouncycastle.cryptography/2.6.2",
+      "hashPath": "bouncycastle.cryptography.2.6.2.nupkg.sha512"
+    },
+    "Docker.DotNet.Enhanced/3.131.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-hGLHCNUsQbT2Ab/HUznRnNqYZQs40zInXa3eLwYjeNyfUYbw1pqqDGqcOLl5uGepS8IuigEYakEdAcVT/2ezYg==",
+      "path": "docker.dotnet.enhanced/3.131.1",
+      "hashPath": "docker.dotnet.enhanced.3.131.1.nupkg.sha512"
+    },
+    "Docker.DotNet.Enhanced.X509/3.131.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-8FU7zmttFQzp0xb0EPupxQ0nGtC2cTpukgh3jMxMT8luj5TSDyzIKTnroDpXCjpg9P2fV+6JIvC+IetsMEfyBA==",
+      "path": "docker.dotnet.enhanced.x509/3.131.1",
+      "hashPath": "docker.dotnet.enhanced.x509.3.131.1.nupkg.sha512"
+    },
+    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-L3AdmZ1WOK4XXT5YFPEwyt0ep6l8lGIPs7F5OOBZc77Zqeo01Of7XXICy47628sdVl0v/owxYJTe86DTgFwKCA==",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/10.0.0",
+      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.10.0.0.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Logging.Abstractions/10.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-FU/IfjDfwaMuKr414SSQNTIti/69bHEMb+QKrskRb26oVqpx3lNFXMjs/RC9ZUuhBhcwDM2BwOgoMw+PZ+beqQ==",
+      "path": "microsoft.extensions.logging.abstractions/10.0.0",
+      "hashPath": "microsoft.extensions.logging.abstractions.10.0.0.nupkg.sha512"
+    },
+    "Npgsql/10.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-q5RfBI+wywJSFUNDE1L4ZbHEHCFTblo8Uf6A6oe4feOUFYiUQXyAf9GBh5qEZpvJaHiEbpBPkQumjEhXCJxdrg==",
+      "path": "npgsql/10.0.2",
+      "hashPath": "npgsql.10.0.2.nupkg.sha512"
+    },
+    "SharpZipLib/1.4.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-yjj+3zgz8zgXpiiC3ZdF/iyTBbz2fFvMxZFEBPUcwZjIvXOf37Ylm+K58hqMfIBt5JgU/Z2uoUS67JmTLe973A==",
+      "path": "sharpziplib/1.4.2",
+      "hashPath": "sharpziplib.1.4.2.nupkg.sha512"
+    },
+    "SSH.NET/2025.1.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-jrnbtf0ItVaXAe6jE8X/kSLa6uC+0C+7W1vepcnRQB/rD88qy4IxG7Lf1FIbWmkoc4iVXv0pKrz+Wc6J4ngmHw==",
+      "path": "ssh.net/2025.1.0",
+      "hashPath": "ssh.net.2025.1.0.nupkg.sha512"
+    },
+    "Testcontainers/4.11.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-9pBNaK9Ra3GVnr5h6gaDJOBH0txA5G3Juho5WANPuyu38l5xyr2lCvf11oA5/uSd+Lh4Wtng34nKp3nMiea02g==",
+      "path": "testcontainers/4.11.0",
+      "hashPath": "testcontainers.4.11.0.nupkg.sha512"
+    },
+    "Testcontainers.PostgreSql/4.11.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-OWGi0Og+qFpr2OPDignA74aJSfUd0nvZOaXNGWXwMJR1BvpdzhCNHQB2h7yLSTb0a8JVmmQQ4mUpHAC9q27NLw==",
+      "path": "testcontainers.postgresql/4.11.0",
+      "hashPath": "testcontainers.postgresql.4.11.0.nupkg.sha512"
+    },
+    "Stove.Net.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
