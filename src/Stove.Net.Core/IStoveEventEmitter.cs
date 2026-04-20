@@ -20,4 +20,7 @@ public interface IStoveEventEmitter
 
     /// <summary>Record a timed span.</summary>
     void EmitSpan(StoveSpan span);
+
+    /// <summary>Record a state snapshot (e.g., HTTP body, DB state).</summary>
+    void EmitSnapshot(StoveSnapshot snapshot);
 }

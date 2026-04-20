@@ -50,6 +50,14 @@ public sealed class ConsoleEventListener : IStoveEventListener
             Console.WriteLine($"{Prefix}   🔍 {span.ServiceName,-25} {detail}  ({span.DurationMs}ms)");
     }
 
+    public void OnSnapshotRecorded(StoveSnapshot snapshot)
+    {
+        var summary = string.IsNullOrEmpty(snapshot.Summary)
+            ? Truncate(snapshot.StateJson, 120)
+            : snapshot.Summary;
+        Console.WriteLine($"{Prefix}   📸 {snapshot.System,-25} {summary}");
+    }
+
     public void OnTestEnded(string testId, TimeSpan duration, string? error)
     {
         if (error != null)

@@ -10,6 +10,7 @@ public interface IStoveEventListener
     void OnTestStarted(string testId, string testName, string specName);
     void OnEntryRecorded(StoveEntry entry);
     void OnSpanRecorded(StoveSpan span);
+    void OnSnapshotRecorded(StoveSnapshot snapshot);
     void OnTestEnded(string testId, TimeSpan duration, string? error);
     void OnRunEnded(int total, int passed, int failed, TimeSpan duration);
 }

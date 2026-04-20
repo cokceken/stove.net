@@ -70,6 +70,13 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
             listener.OnSpanRecorded(span);
     }
 
+    /// <inheritdoc/>
+    public void EmitSnapshot(StoveSnapshot snapshot)
+    {
+        foreach (var listener in _listeners)
+            listener.OnSnapshotRecorded(snapshot);
+    }
+
     // ---- Listener registration ----
 
     /// <summary>

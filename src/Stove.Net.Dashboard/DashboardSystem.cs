@@ -124,6 +124,21 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
         Enqueue(new DashboardEvent { RunId = _runId, SpanRecorded = evt });
     }
 
+    public void OnSnapshotRecorded(StoveSnapshot snapshot)
+    {
+        Enqueue(new DashboardEvent
+        {
+            RunId = _runId,
+            Snapshot = new SnapshotEvent
+            {
+                TestId = snapshot.TestId,
+                System = snapshot.System,
+                StateJson = snapshot.StateJson,
+                Summary = snapshot.Summary
+            }
+        });
+    }
+
     public void OnRunEnded(int total, int passed, int failed, TimeSpan duration)
     {
         Enqueue(new DashboardEvent
