@@ -23,7 +23,7 @@ namespace Stove.Net.Xunit;
 /// }
 /// </code>
 /// </summary>
-public abstract class StoveFixture<TProgram> : IAsyncLifetime
+public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
     where TProgram : class
 {
     private WebApplicationFactory<TProgram>? _factory;

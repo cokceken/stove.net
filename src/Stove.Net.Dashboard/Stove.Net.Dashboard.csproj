@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Stove.Net.Dashboard</RootNamespace>
+        <Description>Stove dashboard integration — streams Stove.Net test events to the Stove UI via gRPC.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Stove.Net.Core\Stove.Net.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+        <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
+        <PackageReference Include="Grpc.Tools" Version="2.67.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="proto\stove\dashboard\v1\dashboard_events.proto"
+                  ProtoRoot="proto"
+                  GrpcServices="None" />
+        <Protobuf Include="proto\stove\dashboard\v1\dashboard_service.proto"
+                  ProtoRoot="proto"
+                  GrpcServices="Client" />
+    </ItemGroup>
+
+</Project>
