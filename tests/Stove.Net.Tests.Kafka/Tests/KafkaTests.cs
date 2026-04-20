@@ -49,5 +49,34 @@ public class KafkaTests(KafkaOnlyFixture fixture) : IClassFixture<KafkaOnlyFixtu
         });
     }
 
+    [Fact]
+    [Trait("Category", "Slow")]
+    public async Task Should_pause_and_unpause_broker()
+    {
+        await fixture.Stove.Validate(async s =>
+        {
+            await s.Kafka(async kafka =>
+            {
+                // Verify publishing works before pause
+                await kafka.PublishAsync("test-topic", new TestMessage("before-pause", 0));
+
+                // Pause the broker — freezes all processes (connections will hang)
+                await kafka.PauseBroker();
+
+                // Wait briefly then unpause
+                await Task.Delay(2000);
+
+                // Unpause the broker — resumes all processes
+                await kafka.UnpauseBroker();
+
+                // Give the broker a moment to stabilize
+                await Task.Delay(3000);
+
+                // Publishing should work again after unpausing
+                await kafka.PublishAsync("test-topic", new TestMessage("after-unpause", 1));
+            });
+        });
+    }
+
     private record TestMessage(string Text, int Number);
 }

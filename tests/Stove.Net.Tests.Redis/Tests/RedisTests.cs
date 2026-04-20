@@ -102,4 +102,43 @@ public class RedisTests(RedisOnlyFixture fixture) : IClassFixture<RedisOnlyFixtu
     }
 
     private record TestItem(string Name, int Count);
+
+    [Fact]
+    public async Task Should_reject_writes_when_maxmemory_exceeded()
+    {
+        await fixture.Stove.Validate(async s =>
+        {
+            await s.Redis(async redis =>
+            {
+                // Set a very small memory limit and noeviction policy
+                await redis.SetMaxMemory("1kb");
+                await redis.SetMaxMemoryPolicy("noeviction");
+
+                // Writing a large value should fail
+                var largeValue = new string('x', 10_000);
+                var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
+                {
+                    await redis.SetAsync("big-key", largeValue);
+                });
+                Assert.Contains("OOM", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+                // Restore to unlimited
+                await redis.SetMaxMemory("0");
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Should_set_idle_timeout()
+    {
+        await fixture.Stove.Validate(async s =>
+        {
+            await s.Redis(async redis =>
+            {
+                // Set and verify — just testing the command doesn't throw
+                await redis.SetIdleTimeout(300);
+                await redis.SetIdleTimeout(0); // Reset
+            });
+        });
+    }
 }

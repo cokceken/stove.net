@@ -168,6 +168,65 @@ public class RedisSystem(RedisSystemOptions options) : IPluggedSystem, IExposesC
         return this;
     }
 
+    // --- Fault Injection ---
+
+    /// <summary>
+    /// Set the maximum memory Redis is allowed to use.
+    /// Once the limit is hit, Redis will reject writes depending on the eviction policy.
+    /// Useful for testing OOM error handling in the application.
+    /// </summary>
+    public async Task<RedisSystem> SetMaxMemory(string maxMemory)
+    {
+        var server = GetServer();
+        await server.ConfigSetAsync("maxmemory", maxMemory);
+        return this;
+    }
+
+    /// <summary>
+    /// Set the maxmemory eviction policy.
+    /// Common values: "noeviction" (return errors), "allkeys-lru", "volatile-lru".
+    /// </summary>
+    public async Task<RedisSystem> SetMaxMemoryPolicy(string policy)
+    {
+        var server = GetServer();
+        await server.ConfigSetAsync("maxmemory-policy", policy);
+        return this;
+    }
+
+    /// <summary>
+    /// Set the client idle timeout in seconds.
+    /// Connections idle for longer than this will be closed by Redis.
+    /// Set to 0 to disable (default).
+    /// </summary>
+    public async Task<RedisSystem> SetIdleTimeout(int seconds)
+    {
+        var server = GetServer();
+        await server.ConfigSetAsync("timeout", seconds.ToString());
+        return this;
+    }
+
+    /// <summary>
+    /// Simulate a slow Redis command by executing DEBUG SLEEP.
+    /// Blocks the server for the specified duration.
+    /// Useful for testing command timeout handling.
+    /// </summary>
+    public async Task<RedisSystem> SimulateSlowCommand(TimeSpan duration)
+    {
+        var server = GetServer();
+        await server.ExecuteAsync("DEBUG", ["SLEEP", duration.TotalSeconds.ToString("F1")]);
+        return this;
+    }
+
+    private IServer GetServer()
+    {
+        // Create an admin-enabled connection for CONFIG and DEBUG commands
+        var config = ConfigurationOptions.Parse(ConnectionString);
+        config.AllowAdmin = true;
+        var adminMultiplexer = ConnectionMultiplexer.Connect(config);
+        var endpoint = adminMultiplexer.GetEndPoints().First();
+        return adminMultiplexer.GetServer(endpoint);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_multiplexer != null)

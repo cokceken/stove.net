@@ -24,6 +24,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem,
     public async Task RunAsync()
     {
         _container = new PostgreSqlBuilder(new DockerImage("postgres:16-alpine"))
+            .WithDatabase("stove_test")
             .Build();
 
         await _container.StartAsync();
@@ -144,6 +145,49 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem,
         {
             cmd.Parameters.AddWithValue($"@{prop.Name}", prop.GetValue(parameters) ?? DBNull.Value);
         }
+    }
+
+    // --- Fault Injection ---
+
+    /// <summary>
+    /// Simulate a slow query by executing pg_sleep inside the database.
+    /// Blocks one connection for the specified duration.
+    /// Useful for testing query timeout handling in the application.
+    /// </summary>
+    public async Task<PostgreSqlSystem> SimulateSlowQuery(TimeSpan duration)
+    {
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand($"SELECT pg_sleep({duration.TotalSeconds})", conn);
+        cmd.CommandTimeout = (int)duration.TotalSeconds + 30;
+        await cmd.ExecuteNonQueryAsync();
+        return this;
+    }
+
+    /// <summary>
+    /// Toggle read-only mode on the test database.
+    /// When enabled, any INSERT/UPDATE/DELETE on new connections will fail.
+    /// Useful for testing how the application handles read-only database scenarios.
+    /// </summary>
+    public async Task<PostgreSqlSystem> SetReadOnly(bool readOnly)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(ConnectionString);
+        var dbName = builder.Database;
+
+        // Connect to 'postgres' database (always writable) to alter the test database
+        builder.Database = "postgres";
+        await using var conn = new NpgsqlConnection(builder.ConnectionString);
+        await conn.OpenAsync();
+
+        var mode = readOnly ? "on" : "off";
+        await using var cmd = new NpgsqlCommand(
+            $"ALTER DATABASE \"{dbName}\" SET default_transaction_read_only = {mode}", conn);
+        await cmd.ExecuteNonQueryAsync();
+
+        // Clear connection pools so new connections pick up the changed setting
+        NpgsqlConnection.ClearAllPools();
+
+        return this;
     }
 
     public async ValueTask DisposeAsync()

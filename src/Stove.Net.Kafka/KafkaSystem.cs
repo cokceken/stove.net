@@ -199,6 +199,63 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
         return $"Captured messages by topic:\n{string.Join("\n", topicSummaries)}";
     }
 
+    // --- Fault Injection ---
+
+    /// <summary>
+    /// Stop the Kafka broker container. Simulates broker unavailability.
+    /// While stopped, publish and consume operations will fail.
+    /// Call <see cref="StartBroker"/> to restore.
+    /// </summary>
+    public async Task<KafkaSystem> StopBroker()
+    {
+        if (_container == null)
+            throw new InvalidOperationException("Kafka container is not started yet.");
+        await _container.StopAsync();
+        return this;
+    }
+
+    /// <summary>
+    /// Start the Kafka broker container after it was stopped.
+    /// The consumer will need to reconnect, which may take a few seconds.
+    /// </summary>
+    public async Task<KafkaSystem> StartBroker()
+    {
+        if (_container == null)
+            throw new InvalidOperationException("Kafka container is not started yet.");
+        await _container.StartAsync();
+        return this;
+    }
+
+    /// <summary>
+    /// Pause the Kafka broker container. Freezes all processes inside the container,
+    /// simulating a completely unresponsive broker (connections hang, no timeouts).
+    /// Call <see cref="UnpauseBroker"/> to resume.
+    /// </summary>
+    public async Task<KafkaSystem> PauseBroker()
+    {
+        if (_container == null)
+            throw new InvalidOperationException("Kafka container is not started yet.");
+
+        var result = await _container.ExecAsync(["bash", "-c", "kill -STOP 1"]);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Failed to pause Kafka broker: {result.Stderr}");
+        return this;
+    }
+
+    /// <summary>
+    /// Unpause the Kafka broker container after a <see cref="PauseBroker"/> call.
+    /// </summary>
+    public async Task<KafkaSystem> UnpauseBroker()
+    {
+        if (_container == null)
+            throw new InvalidOperationException("Kafka container is not started yet.");
+
+        var result = await _container.ExecAsync(["bash", "-c", "kill -CONT 1"]);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Failed to unpause Kafka broker: {result.Stderr}");
+        return this;
+    }
+
     // --- Background Consumer ---
 
     private void StartBackgroundConsumer()

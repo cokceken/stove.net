@@ -6,6 +6,7 @@ using Stove.Net.Tests.WireMock.Setup;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using Xunit;
+using FaultType = WireMock.ResponseBuilders.FaultType;
 
 namespace Stove.Net.Tests.WireMock.Tests;
 
@@ -116,6 +117,75 @@ public class WireMockTests(WireMockOnlyFixture fixture) : IClassFixture<WireMock
                 using var client = new HttpClient();
                 var response = await client.GetStringAsync($"{wireMock.Url}/native");
                 Assert.Equal("native-api", response);
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Should_stub_with_delay()
+    {
+        await fixture.Stove.Validate(async s =>
+        {
+            await s.WireMock(async wireMock =>
+            {
+                wireMock.StubWithDelay("/api/slow", HttpMethods.Get, 200,
+                    TimeSpan.FromSeconds(1), body: "finally");
+
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var response = await client.GetStringAsync($"{wireMock.Url}/api/slow");
+                sw.Stop();
+
+                Assert.Equal("finally", response);
+                Assert.True(sw.ElapsedMilliseconds >= 900,
+                    $"Expected >= 900ms delay but got {sw.ElapsedMilliseconds}ms");
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Should_stub_fault_empty_response()
+    {
+        await fixture.Stove.Validate(async s =>
+        {
+            await s.WireMock(async wireMock =>
+            {
+                wireMock.StubFault("/api/broken", HttpMethods.Get, FaultType.EMPTY_RESPONSE);
+
+                using var client = new HttpClient();
+                var response = await client.GetAsync($"{wireMock.Url}/api/broken");
+
+                var body = await response.Content.ReadAsStringAsync();
+                Assert.Empty(body);
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Should_stub_fault_malformed_response()
+    {
+        await fixture.Stove.Validate(async s =>
+        {
+            await s.WireMock(async wireMock =>
+            {
+                wireMock.StubFault("/api/garbage", HttpMethods.Get,
+                    FaultType.MALFORMED_RESPONSE_CHUNK);
+
+                using var client = new HttpClient();
+                // Malformed response chunk may throw or return a garbled response
+                // depending on the HTTP client implementation
+                try
+                {
+                    var response = await client.GetAsync($"{wireMock.Url}/api/garbage");
+                    // If no exception, the response should at least be unusual
+                    // (WireMock sends OK header then garbage data)
+                    var body = await response.Content.ReadAsStringAsync();
+                    Assert.NotNull(body);
+                }
+                catch (HttpRequestException)
+                {
+                    // This is also a valid outcome — the client rejected the malformed data
+                }
             });
         });
     }

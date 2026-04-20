@@ -135,6 +135,14 @@ public async Task Should_create_order()
 - ✅ **Stove.Net.WireMock** — External API mocking via WireMock.Net
 - ✅ **Stove.Net.MongoDb** — MongoDB support (Testcontainers.MongoDb + MongoDB.Driver)
 
+### v0.3.1 — Plugin Maturation: Fault Injection ✅ DONE
+> Goal: Enable testing of failure scenarios, not just happy paths.
+
+- ✅ **WireMock fault DSL** — `StubWithDelay()`, `StubWithRandomDelay()`, `StubFault()` for HTTP-level fault injection
+- ✅ **PostgreSQL faults** — `SimulateSlowQuery(TimeSpan)` via `pg_sleep`, `SetReadOnly(bool)` via `ALTER DATABASE`
+- ✅ **Redis faults** — `SetMaxMemory()`, `SetMaxMemoryPolicy()`, `SetIdleTimeout()`, `SimulateSlowCommand()` via admin CONFIG commands
+- ✅ **Kafka faults** — `StopBroker()`, `StartBroker()`, `PauseBroker()`, `UnpauseBroker()` for broker availability testing
+
 ### v0.4 — Observability & DX
 > Goal: Make test failures easy to diagnose.
 

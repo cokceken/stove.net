@@ -1,7 +1,9 @@
 using Stove.Net.Core;
+using WireMock.Admin.Mappings;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
+using FaultType = WireMock.ResponseBuilders.FaultType;
 
 namespace Stove.Net.WireMock;
 
@@ -83,6 +85,79 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
     public WireMockSystem Stub(IRequestBuilder request, IResponseBuilder response)
     {
         Server.Given(request).RespondWith(response);
+        return this;
+    }
+
+    // --- Fault / Delay Stubs ---
+
+    /// <summary>
+    /// Stub a delayed response. The server will wait the specified duration
+    /// before sending the response. Useful for testing timeout handling.
+    /// </summary>
+    public WireMockSystem StubWithDelay(
+        string path,
+        string httpMethod,
+        int statusCode,
+        TimeSpan delay,
+        string? body = null)
+    {
+        Server.WithMapping(new MappingModel
+        {
+            Request = new RequestModel { Path = path, Methods = [httpMethod] },
+            Response = new ResponseModel
+            {
+                StatusCode = statusCode,
+                Body = body,
+                Delay = (int)delay.TotalMilliseconds
+            }
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Stub a delayed response with a random delay between min and max.
+    /// Useful for simulating realistic variable-latency external APIs.
+    /// </summary>
+    public WireMockSystem StubWithRandomDelay(
+        string path,
+        string httpMethod,
+        int statusCode,
+        TimeSpan minDelay,
+        TimeSpan maxDelay,
+        string? body = null)
+    {
+        Server.WithMapping(new MappingModel
+        {
+            Request = new RequestModel { Path = path, Methods = [httpMethod] },
+            Response = new ResponseModel
+            {
+                StatusCode = statusCode,
+                Body = body,
+                MinimumRandomDelay = (int)minDelay.TotalMilliseconds,
+                MaximumRandomDelay = (int)maxDelay.TotalMilliseconds
+            }
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Stub a fault response. The server will inject the specified fault type
+    /// instead of returning a normal response.
+    /// Use <see cref="FaultType.EMPTY_RESPONSE"/> or <see cref="FaultType.MALFORMED_RESPONSE_CHUNK"/>.
+    /// </summary>
+    public WireMockSystem StubFault(
+        string path,
+        string httpMethod,
+        FaultType faultType)
+    {
+        Server.WithMapping(new MappingModel
+        {
+            Request = new RequestModel { Path = path, Methods = [httpMethod] },
+            Response = new ResponseModel
+            {
+                Fault = new FaultModel { Type = faultType.ToString() }
+            }
+        });
         return this;
     }
 
