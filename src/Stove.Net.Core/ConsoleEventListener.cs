@@ -30,6 +30,18 @@ public sealed class ConsoleEventListener : IStoveEventListener
 
     public void OnEntryRecorded(StoveEntry entry)
     {
+        // Application logs get a distinct rendering
+        if (entry.System == "Application")
+        {
+            var levelIcon = GetLogLevelIcon(entry.Action);
+            var category = entry.Input ?? "Unknown";
+            var message = entry.Output ?? "";
+            Console.WriteLine($"{Prefix} {levelIcon} [{category}] {message}");
+            if (!string.IsNullOrEmpty(entry.Error))
+                Console.WriteLine($"{Prefix}       {Truncate(entry.Error, 200)}");
+            return;
+        }
+
         var icon = entry.IsSuccess ? Pass : Fail;
         var location = $"{entry.System}.{entry.Action}";
         var detail = BuildDetail(entry);
@@ -123,6 +135,17 @@ public sealed class ConsoleEventListener : IStoveEventListener
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength] + "…";
+
+    private static string GetLogLevelIcon(string logLevel) => logLevel switch
+    {
+        "Trace" => "⬜",
+        "Debug" => "🔹",
+        "Information" => "ℹ️",
+        "Warning" => "⚠️",
+        "Error" => "🔴",
+        "Critical" => "💥",
+        _ => "📝"
+    };
 
     private static string BuildSpanDetail(StoveSpan span)
     {

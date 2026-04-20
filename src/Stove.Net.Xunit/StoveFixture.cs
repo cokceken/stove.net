@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Stove.Net.Core;
 using Xunit;
 
@@ -65,6 +66,13 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
     /// </summary>
     protected virtual void ConfigureWebHost(IWebHostBuilder builder) { }
 
+    /// <summary>
+    /// Override to configure which application logs Stove captures.
+    /// Return null to disable application log capture entirely.
+    /// Default: captures Information+ logs, excludes Stove.Net and gRPC internals.
+    /// </summary>
+    protected virtual StoveLogCaptureOptions? ConfigureLogCapture() => new();
+
     public virtual async ValueTask InitializeAsync()
     {
         var builder = StoveBuilder.Create();
@@ -76,6 +84,9 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
         // Collect configuration from all systems
         var stoveConfig = _stove.CollectConfiguration().ToList();
 
+        // Resolve log capture options
+        var logCaptureOptions = ConfigureLogCapture();
+
         // Create the WebApplicationFactory with injected configuration
         _factory = new WebApplicationFactory<TProgram>()
             .WithWebHostBuilder(webBuilder =>
@@ -85,6 +96,15 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
                     if (stoveConfig.Count > 0)
                         config.AddInMemoryCollection(stoveConfig!);
                 });
+
+                // Auto-inject Stove logger to capture SUT's ILogger output
+                if (logCaptureOptions != null)
+                {
+                    webBuilder.ConfigureLogging(logging =>
+                    {
+                        logging.AddProvider(new StoveLoggerProvider(_stove, logCaptureOptions));
+                    });
+                }
 
                 ConfigureWebHost(webBuilder);
             });
