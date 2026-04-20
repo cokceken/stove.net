@@ -127,13 +127,13 @@ public async Task Should_create_order()
 - ✅ Configuration exposure — `IExposesConfiguration` + `CollectConfiguration()` auto-injects container connection strings into app config
 - ✅ Web host customization — `ConfigureWebHost(IWebHostBuilder)` virtual hook for service replacement (e.g., swap DB provider)
 
-### v0.3 — More Components (In Progress)
+### v0.3 — More Components ✅ DONE
 > Goal: Expand supported infrastructure.
 
 - ✅ **Stove.Net.Kafka** — Publish/consume Kafka messages (Testcontainers.Kafka + Confluent.Kafka)
 - ✅ **Stove.Net.Redis** — Redis assertions (Testcontainers.Redis + StackExchange.Redis)
 - ✅ **Stove.Net.WireMock** — External API mocking via WireMock.Net
-- **Stove.Net.MongoDb** — MongoDB support
+- ✅ **Stove.Net.MongoDb** — MongoDB support (Testcontainers.MongoDb + MongoDB.Driver)
 
 ### v0.4 — Observability & DX
 > Goal: Make test failures easy to diagnose.

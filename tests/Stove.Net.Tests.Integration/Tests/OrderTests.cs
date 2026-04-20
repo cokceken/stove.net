@@ -15,8 +15,15 @@ namespace Stove.Net.Tests.Integration.Tests;
 /// Integration tests combining HTTP + PostgreSQL + Kafka + Redis systems.
 /// Validates end-to-end flows through a real API, database, message broker, and cache.
 /// </summary>
-public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationFixture>
+public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationFixture>, IAsyncLifetime
 {
+    public async ValueTask InitializeAsync()
+    {
+        await fixture.Stove.CleanupAsync();
+    }
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {

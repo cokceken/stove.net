@@ -18,6 +18,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.Redis", "src\Stov
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.WireMock", "src\Stove.Net.WireMock\Stove.Net.WireMock.csproj", "{B7000000-0000-0000-0000-000000000001}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.MongoDb", "src\Stove.Net.MongoDb\Stove.Net.MongoDb.csproj", "{B8000000-0000-0000-0000-000000000001}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.Xunit", "src\Stove.Net.Xunit\Stove.Net.Xunit.csproj", "{B4000000-0000-0000-0000-000000000001}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.Tests.ExampleApp", "tests\Stove.Net.Tests.ExampleApp\Stove.Net.Tests.ExampleApp.csproj", "{C2000000-0000-0000-0000-000000000001}"
@@ -33,6 +35,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.Tests.Redis", "tests\Stove.Net.Tests.Redis\Stove.Net.Tests.Redis.csproj", "{C7000000-0000-0000-0000-000000000001}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.Tests.WireMock", "tests\Stove.Net.Tests.WireMock\Stove.Net.Tests.WireMock.csproj", "{C8000000-0000-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stove.Net.Tests.MongoDb", "tests\Stove.Net.Tests.MongoDb\Stove.Net.Tests.MongoDb.csproj", "{C9000000-0000-0000-0000-000000000001}"
 EndProject
 
 Global
@@ -97,6 +101,14 @@ GlobalSection(ProjectConfigurationPlatforms) = postSolution
 {C8000000-0000-0000-0000-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
 {C8000000-0000-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
 {C8000000-0000-0000-0000-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+{B8000000-0000-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+{B8000000-0000-0000-0000-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+{B8000000-0000-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+{B8000000-0000-0000-0000-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+{C9000000-0000-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+{C9000000-0000-0000-0000-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+{C9000000-0000-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+{C9000000-0000-0000-0000-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
 EndGlobalSection
 GlobalSection(NestedProjects) = preSolution
 {B1000000-0000-0000-0000-000000000001} = {A1000000-0000-0000-0000-000000000001}
@@ -113,5 +125,7 @@ GlobalSection(NestedProjects) = preSolution
 {C6000000-0000-0000-0000-000000000001} = {A2000000-0000-0000-0000-000000000001}
 {C7000000-0000-0000-0000-000000000001} = {A2000000-0000-0000-0000-000000000001}
 {C8000000-0000-0000-0000-000000000001} = {A2000000-0000-0000-0000-000000000001}
+{B8000000-0000-0000-0000-000000000001} = {A1000000-0000-0000-0000-000000000001}
+{C9000000-0000-0000-0000-000000000001} = {A2000000-0000-0000-0000-000000000001}
 EndGlobalSection
 EndGlobal

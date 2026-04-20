@@ -42,7 +42,7 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
     {
         if (options.ResetOnCleanup && _server != null)
         {
-            _server.Reset();
+            _server.ResetLogEntries();
         }
 
         return Task.CompletedTask;
