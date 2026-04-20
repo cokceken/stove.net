@@ -156,13 +156,20 @@ Application ──▶ System.Diagnostics.Activity ──▶ InProcessTraceCollec
 
 ### What Works Today
 
-- ✅ Full event lifecycle: `RunStarted` → `TestStarted` → entries/spans → `TestEnded` → `RunEnded`
+- ✅ Full event lifecycle: `RunStarted` → `TestStarted` → entries/spans/snapshots → `TestEnded` → `RunEnded`
 - ✅ gRPC integration with shared proto contract
 - ✅ Auto-disable on consecutive failures (configurable threshold)
 - ✅ Configurable drain timeout
 - ✅ Trace propagation via `System.Diagnostics.Activity`
 - ✅ `InProcessTraceCollector` captures activities → `StoveSpan` → dashboard
 - ✅ Background channel-based emit (non-blocking to tests)
+- ✅ Entry metadata mapping (TraceId + Metadata dict) with system-specific context
+- ✅ `IReportsState` interface — all 6 systems report state snapshots
+- ✅ Auto snapshot collection at test end (like Kotlin's `Reports`)
+- ✅ Per-test ID correlation via `Activity.Baggage` + `X-Stove-Test-Id` header
+- ✅ `StoveTestIdHandler` DelegatingHandler for HTTP + W3C baggage propagation
+- ✅ Kafka message header injection with test ID
+- ✅ `test_path` populated from xUnit TestContext (namespace → class → method)
 
 ---
 
@@ -172,16 +179,18 @@ Application ──▶ System.Diagnostics.Activity ──▶ InProcessTraceCollec
 |---|:---:|:---:|---|
 | **Event Lifecycle** | ✅ | ✅ | Both emit all 7 event types |
 | **Unary gRPC (`SendEvent`)** | ✅ | ✅ | Identical behavior |
-| **Streaming gRPC (`StreamEvents`)** | ✅ | ❌ | Kotlin supports bidirectional streaming |
+| **Streaming gRPC (`StreamEvents`)** | ✅ | ❌ | Kotlin supports bidirectional streaming; deferred — unary works fine |
 | **Unbounded event channel** | ✅ | ✅ | Kotlin: `Channel`, .NET: `System.Threading.Channels` |
 | **Background drain** | ✅ | ✅ | Kotlin: coroutine on `Dispatchers.IO`, .NET: `Task` on ThreadPool |
 | **Auto-disable on failure** | ✅ | ✅ | Both default to 5 consecutive failures |
 | **Drain timeout** | ✅ (30s) | ✅ (30s) | Both configurable |
-| **`Reports` interface** | ✅ | ❌ | Systems in Kotlin can report their state |
-| **Auto snapshot collection** | ✅ | ❌ | Kotlin collects from all `Reports` systems at test end |
-| **`test_path` in TestStarted** | ✅ | ❌ | Kotlin populates hierarchical test path |
-| **W3C baggage propagation** | ✅ | ❌ | Kotlin propagates test ID via W3C baggage |
-| **Per-test ID headers** | ✅ | ❌ | `X-Stove-Test-Id` in Kafka/WireMock/HTTP |
+| **`Reports` interface** | ✅ | ✅ | `IReportsState` with `Report() → StoveSnapshot` |
+| **Auto snapshot collection** | ✅ | ✅ | `StoveInstance.NotifyTestEnded` collects from all `IReportsState` systems |
+| **Entry metadata** | ✅ | ✅ | System-specific context (http.method, db.statement, etc.) in metadata map |
+| **Entry TraceId mapping** | ✅ | ✅ | TraceId mapped to proto `trace_id` field |
+| **`test_path` in TestStarted** | ✅ | ✅ | Built from xUnit TestContext (namespace/class/method) |
+| **W3C baggage propagation** | ✅ | ✅ | `StoveTestIdHandler` injects `baggage` header |
+| **Per-test ID headers** | ✅ | ✅ | HTTP: `StoveTestIdHandler`, Kafka: message headers, entries: `stove.test.id` |
 | **Trace context model** | `InheritableThreadLocal` + coroutine context | `Activity.Current` (async-aware) | Functionally equivalent |
 | **OTel integration** | Java Agent via Gradle plugin | `ActivityListener` | Different mechanisms, same goal |
 | **Emitter initialization** | Lazy (on `run()`) | Eager (constructor) | .NET fixed ordering bug with eager init |
@@ -189,54 +198,9 @@ Application ──▶ System.Diagnostics.Activity ──▶ InProcessTraceCollec
 
 ---
 
-## Gaps and Improvement Opportunities
+## Remaining Gap
 
-### 1. No `Reports` Interface for Systems
-
-**Impact**: High — Snapshots are a core dashboard feature.
-
-In Kotlin, systems implement `Reports` with a `report(): SystemSnapshot` method. At test end, `DashboardSystem` automatically iterates all plugged systems, collects snapshots, and emits them. In Stove.Net, there is no equivalent interface, so snapshot events are never emitted automatically.
-
-**Recommendation**: Define an `IReportsState` interface (or similar) that systems can implement:
-
-```csharp
-public interface IReportsState
-{
-    SystemSnapshot Report();
-}
-
-public record SystemSnapshot(string System, string StateJson, string Summary);
-```
-
-### 2. No Automatic Snapshot Collection at Test End
-
-**Impact**: High — Directly depends on Gap 1.
-
-Even if systems implemented a reporting interface, `DashboardSystem` does not currently enumerate systems and collect snapshots at test end.
-
-**Recommendation**: After implementing `IReportsState`, update the test-end handler in `DashboardSystem` to:
-1. Iterate all `IPluggedSystem` instances
-2. Check which implement `IReportsState`
-3. Call `Report()` on each
-4. Emit a `SnapshotEvent` per system
-
-### 3. No Per-Test ID Header Propagation
-
-**Impact**: Medium — Required for trace correlation in multi-system tests.
-
-Kotlin injects `X-Stove-Test-Id` into Kafka headers, WireMock requests, and HTTP calls. This enables the dashboard to correlate all interactions to a specific test. Stove.Net does not propagate test IDs through system interactions.
-
-**Recommendation**: Use `Activity.Baggage` to carry the test ID and inject it into outgoing requests. Each system component (Kafka, WireMock, HTTP) should read the current test ID and include it in its interactions.
-
-### 4. `test_path` Not Populated in TestStartedEvent
-
-**Impact**: Low — Cosmetic, but useful for hierarchical test visualization.
-
-Kotlin populates `test_path[]` with the hierarchical path of the test (e.g., `["FeatureSpec", "when user logs in", "should return token"]`). Stove.Net leaves this empty.
-
-**Recommendation**: Extract test hierarchy from the xUnit/NUnit test context and populate `test_path` in `TestStartedEvent`.
-
-### 5. No Streaming RPC Support
+### Streaming RPC Support
 
 **Impact**: Low — Unary `SendEvent` works correctly and is what Kotlin actually uses in practice.
 
@@ -244,49 +208,8 @@ The proto defines `StreamEvents` for bidirectional streaming, but neither implem
 
 **Recommendation**: Defer. Unary RPCs are simpler, easier to debug, and sufficient for current throughput. Consider streaming only if event volume becomes a bottleneck.
 
-### 6. No W3C Baggage Propagation
-
-**Impact**: Medium — Limits cross-service trace correlation.
-
-Kotlin uses W3C `baggage` header to propagate the test ID across service boundaries. Stove.Net relies on `Activity.Current` which does not automatically inject baggage into outgoing HTTP/gRPC calls.
-
-**Recommendation**: Add a `DelegatingHandler` (for `HttpClient`) and interceptors (for gRPC) that inject `baggage` with the current test ID. .NET's `Activity` already supports baggage items — they just need to be propagated.
-
-### 7. Trace Context Sophistication
-
-**Impact**: Low — .NET's `Activity` model is functionally equivalent.
-
-Kotlin uses `InheritableThreadLocal` combined with coroutine context elements to track the current test's trace context. .NET's `Activity.Current` flows automatically across `async`/`await` boundaries, providing equivalent functionality through a different mechanism.
-
-**Recommendation**: No action needed. The approaches are idiomatic to their respective platforms.
-
----
-
-## Recommendations: Next Steps
-
-### Phase 1: Snapshot Support (High Impact)
-
-1. Define `IReportsState` interface in the core abstractions
-2. Implement `IReportsState` on key systems (Kafka, WireMock, EntityFramework, etc.)
-3. Update `DashboardSystem` to collect and emit snapshots at test end
-4. Write tests validating snapshot emission
-
-### Phase 2: Test ID Correlation (Medium Impact)
-
-1. Add test ID to `Activity.Baggage` at test start
-2. Create HTTP `DelegatingHandler` that injects `X-Stove-Test-Id` header
-3. Update Kafka producer to include test ID in message headers
-4. Update WireMock request matching to include test ID
-5. Populate `test_path` from test framework metadata
-
-### Phase 3: Polish (Low Impact)
-
-1. Evaluate streaming RPC if event throughput becomes a concern
-2. Add W3C baggage propagation for cross-service scenarios
-3. Add dashboard connection health metrics / logging
-
 ---
 
 ## Summary
 
-Stove.Net's dashboard integration covers the core event lifecycle and gRPC transport faithfully. The primary gaps are around **snapshot reporting** (systems cannot report their state) and **test ID correlation** (test IDs are not propagated through system interactions). Addressing these two areas would bring Stove.Net to feature parity with the Kotlin reference implementation for dashboard integration.
+Stove.Net's dashboard integration now matches Kotlin Stove's sophistication across all major features: event lifecycle, entry metadata, system snapshots, per-test ID correlation, test path hierarchy, and W3C baggage propagation. The only remaining gap is bidirectional streaming RPC support, which is deferred as unary RPCs are sufficient and simpler.
