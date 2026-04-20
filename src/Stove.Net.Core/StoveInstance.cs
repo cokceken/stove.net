@@ -4,37 +4,57 @@ namespace Stove.Net.Core;
 
 /// <summary>
 /// The central orchestrator that holds registered systems and manages their lifecycle.
+/// Systems are keyed by (Type, Name) — unnamed registrations use the "default" name,
+/// enabling multiple named instances of the same system type (e.g., two PostgreSQL databases).
 /// Inspired by Trendyol/stove's Stove class.
 /// </summary>
 public sealed class StoveInstance : IAsyncDisposable
 {
-    private readonly Dictionary<Type, IPluggedSystem> _systems = new();
+    private readonly Dictionary<SystemKey, IPluggedSystem> _systems = new();
 
     /// <summary>
-    /// Register a plugged system. Called during builder configuration.
+    /// Register a plugged system with the default name.
     /// </summary>
     public void Register<TSystem>(TSystem system) where TSystem : IPluggedSystem
-    {
-        _systems[typeof(TSystem)] = system;
-    }
+        => Register(system, SystemKey.DefaultName);
 
     /// <summary>
-    /// Get a registered system by type, or throw if not registered.
+    /// Register a named plugged system. Use this when you need multiple instances
+    /// of the same system type (e.g., two PostgreSQL databases).
+    /// </summary>
+    public void Register<TSystem>(TSystem system, string name) where TSystem : IPluggedSystem
+        => _systems[new SystemKey(typeof(TSystem), name)] = system;
+
+    /// <summary>
+    /// Get the default-named registered system by type, or throw if not registered.
     /// </summary>
     public TSystem GetSystem<TSystem>() where TSystem : IPluggedSystem
+        => GetSystem<TSystem>(SystemKey.DefaultName);
+
+    /// <summary>
+    /// Get a named registered system by type, or throw if not registered.
+    /// </summary>
+    public TSystem GetSystem<TSystem>(string name) where TSystem : IPluggedSystem
     {
-        if (_systems.TryGetValue(typeof(TSystem), out var system))
+        var key = new SystemKey(typeof(TSystem), name);
+        if (_systems.TryGetValue(key, out var system))
             return (TSystem)system;
 
-        throw new SystemNotRegisteredException(typeof(TSystem));
+        throw new SystemNotRegisteredException(typeof(TSystem), name);
     }
 
     /// <summary>
-    /// Try to get a registered system by type.
+    /// Try to get the default-named registered system by type.
     /// </summary>
     public bool TryGetSystem<TSystem>(out TSystem? system) where TSystem : class, IPluggedSystem
+        => TryGetSystem(SystemKey.DefaultName, out system);
+
+    /// <summary>
+    /// Try to get a named registered system by type.
+    /// </summary>
+    public bool TryGetSystem<TSystem>(string name, out TSystem? system) where TSystem : class, IPluggedSystem
     {
-        if (_systems.TryGetValue(typeof(TSystem), out var s))
+        if (_systems.TryGetValue(new SystemKey(typeof(TSystem), name), out var s))
         {
             system = (TSystem)s;
             return true;
@@ -45,7 +65,8 @@ public sealed class StoveInstance : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns all registered systems that implement the given interface.
+    /// Returns all registered systems that implement the given interface,
+    /// across all names.
     /// </summary>
     public IEnumerable<T> GetSystems<T>() => _systems.Values.OfType<T>();
 

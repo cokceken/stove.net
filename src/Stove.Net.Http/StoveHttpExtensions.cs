@@ -10,22 +10,34 @@ public static class StoveHttpExtensions
     /// <summary>
     /// Register an HTTP client system with the Stove builder.
     /// </summary>
-    public static StoveBuilder WithHttpClient(
-        this StoveBuilder builder)
+    public static StoveBuilder WithHttpClient(this StoveBuilder builder)
     {
-        var system = new HttpClientSystem();
-        builder.WithSystem(system);
+        builder.WithSystem(new HttpClientSystem());
         return builder;
     }
 
     /// <summary>
-    /// Access the HTTP system in a validation block.
+    /// Register a named HTTP client system. Use when you need multiple HTTP clients.
     /// </summary>
-    public static async Task Http(
-        this ValidationDsl dsl,
-        Func<HttpClientSystem, Task> validation)
+    public static StoveBuilder WithHttpClient(this StoveBuilder builder, string name)
     {
-        var system = dsl.Get<HttpClientSystem>();
-        await validation(system);
+        builder.WithSystem(new HttpClientSystem(), name);
+        return builder;
+    }
+
+    /// <summary>
+    /// Access the default HTTP system in a validation block.
+    /// </summary>
+    public static async Task Http(this ValidationDsl dsl, Func<HttpClientSystem, Task> validation)
+    {
+        await validation(dsl.Get<HttpClientSystem>());
+    }
+
+    /// <summary>
+    /// Access a named HTTP system in a validation block.
+    /// </summary>
+    public static async Task Http(this ValidationDsl dsl, string name, Func<HttpClientSystem, Task> validation)
+    {
+        await validation(dsl.Get<HttpClientSystem>(name));
     }
 }

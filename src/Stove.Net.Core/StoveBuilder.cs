@@ -16,12 +16,22 @@ public sealed class StoveBuilder
     public static StoveBuilder Create() => new();
 
     /// <summary>
-    /// Register a plugged system with the Stove instance.
+    /// Register a plugged system with the default name.
     /// Typically called by .WithXxx() extension methods.
     /// </summary>
     public StoveBuilder WithSystem<TSystem>(TSystem system) where TSystem : IPluggedSystem
     {
         Instance.Register(system);
+        return this;
+    }
+
+    /// <summary>
+    /// Register a named plugged system. Use this when you need multiple instances
+    /// of the same type (e.g., two PostgreSQL databases).
+    /// </summary>
+    public StoveBuilder WithSystem<TSystem>(TSystem system, string name) where TSystem : IPluggedSystem
+    {
+        Instance.Register(system, name);
         return this;
     }
 

@@ -16,20 +16,37 @@ public static class StoveRedisExtensions
     {
         var options = new RedisSystemOptions();
         configure?.Invoke(options);
-
-        var system = new RedisSystem(options);
-        builder.WithSystem(system);
+        builder.WithSystem(new RedisSystem(options));
         return builder;
     }
 
     /// <summary>
-    /// Access the Redis system in a validation block.
+    /// Register a named Redis system. Use when you need multiple Redis instances.
     /// </summary>
-    public static async Task Redis(
-        this ValidationDsl dsl,
-        Func<RedisSystem, Task> validation)
+    public static StoveBuilder WithRedis(
+        this StoveBuilder builder,
+        string name,
+        Action<RedisSystemOptions>? configure = null)
     {
-        var system = dsl.Get<RedisSystem>();
-        await validation(system);
+        var options = new RedisSystemOptions();
+        configure?.Invoke(options);
+        builder.WithSystem(new RedisSystem(options), name);
+        return builder;
+    }
+
+    /// <summary>
+    /// Access the default Redis system in a validation block.
+    /// </summary>
+    public static async Task Redis(this ValidationDsl dsl, Func<RedisSystem, Task> validation)
+    {
+        await validation(dsl.Get<RedisSystem>());
+    }
+
+    /// <summary>
+    /// Access a named Redis system in a validation block.
+    /// </summary>
+    public static async Task Redis(this ValidationDsl dsl, string name, Func<RedisSystem, Task> validation)
+    {
+        await validation(dsl.Get<RedisSystem>(name));
     }
 }

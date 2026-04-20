@@ -16,20 +16,37 @@ public static class StoveMongoDbExtensions
     {
         var options = new MongoDbSystemOptions();
         configure?.Invoke(options);
-
-        var system = new MongoDbSystem(options);
-        builder.WithSystem(system);
+        builder.WithSystem(new MongoDbSystem(options));
         return builder;
     }
 
     /// <summary>
-    /// Access the MongoDB system in a validation block.
+    /// Register a named MongoDB system. Use when you need multiple MongoDB instances.
     /// </summary>
-    public static async Task MongoDb(
-        this ValidationDsl dsl,
-        Func<MongoDbSystem, Task> validation)
+    public static StoveBuilder WithMongoDb(
+        this StoveBuilder builder,
+        string name,
+        Action<MongoDbSystemOptions>? configure = null)
     {
-        var system = dsl.Get<MongoDbSystem>();
-        await validation(system);
+        var options = new MongoDbSystemOptions();
+        configure?.Invoke(options);
+        builder.WithSystem(new MongoDbSystem(options), name);
+        return builder;
+    }
+
+    /// <summary>
+    /// Access the default MongoDB system in a validation block.
+    /// </summary>
+    public static async Task MongoDb(this ValidationDsl dsl, Func<MongoDbSystem, Task> validation)
+    {
+        await validation(dsl.Get<MongoDbSystem>());
+    }
+
+    /// <summary>
+    /// Access a named MongoDB system in a validation block.
+    /// </summary>
+    public static async Task MongoDb(this ValidationDsl dsl, string name, Func<MongoDbSystem, Task> validation)
+    {
+        await validation(dsl.Get<MongoDbSystem>(name));
     }
 }

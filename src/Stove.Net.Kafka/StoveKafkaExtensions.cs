@@ -16,20 +16,37 @@ public static class StoveKafkaExtensions
     {
         var options = new KafkaSystemOptions();
         configure?.Invoke(options);
-
-        var system = new KafkaSystem(options);
-        builder.WithSystem(system);
+        builder.WithSystem(new KafkaSystem(options));
         return builder;
     }
 
     /// <summary>
-    /// Access the Kafka system in a validation block.
+    /// Register a named Kafka system. Use when you need multiple Kafka clusters.
     /// </summary>
-    public static async Task Kafka(
-        this ValidationDsl dsl,
-        Func<KafkaSystem, Task> validation)
+    public static StoveBuilder WithKafka(
+        this StoveBuilder builder,
+        string name,
+        Action<KafkaSystemOptions>? configure = null)
     {
-        var system = dsl.Get<KafkaSystem>();
-        await validation(system);
+        var options = new KafkaSystemOptions();
+        configure?.Invoke(options);
+        builder.WithSystem(new KafkaSystem(options), name);
+        return builder;
+    }
+
+    /// <summary>
+    /// Access the default Kafka system in a validation block.
+    /// </summary>
+    public static async Task Kafka(this ValidationDsl dsl, Func<KafkaSystem, Task> validation)
+    {
+        await validation(dsl.Get<KafkaSystem>());
+    }
+
+    /// <summary>
+    /// Access a named Kafka system in a validation block.
+    /// </summary>
+    public static async Task Kafka(this ValidationDsl dsl, string name, Func<KafkaSystem, Task> validation)
+    {
+        await validation(dsl.Get<KafkaSystem>(name));
     }
 }

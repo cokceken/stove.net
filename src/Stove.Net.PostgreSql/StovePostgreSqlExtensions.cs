@@ -16,20 +16,37 @@ public static class StovePostgreSqlExtensions
     {
         var options = new PostgreSqlSystemOptions();
         configure?.Invoke(options);
-
-        var system = new PostgreSqlSystem(options);
-        builder.WithSystem(system);
+        builder.WithSystem(new PostgreSqlSystem(options));
         return builder;
     }
 
     /// <summary>
-    /// Access the PostgreSQL system in a validation block.
+    /// Register a named PostgreSQL system. Use when you need multiple database instances.
     /// </summary>
-    public static async Task PostgreSql(
-        this ValidationDsl dsl,
-        Func<PostgreSqlSystem, Task> validation)
+    public static StoveBuilder WithPostgreSql(
+        this StoveBuilder builder,
+        string name,
+        Action<PostgreSqlSystemOptions>? configure = null)
     {
-        var system = dsl.Get<PostgreSqlSystem>();
-        await validation(system);
+        var options = new PostgreSqlSystemOptions();
+        configure?.Invoke(options);
+        builder.WithSystem(new PostgreSqlSystem(options), name);
+        return builder;
+    }
+
+    /// <summary>
+    /// Access the default PostgreSQL system in a validation block.
+    /// </summary>
+    public static async Task PostgreSql(this ValidationDsl dsl, Func<PostgreSqlSystem, Task> validation)
+    {
+        await validation(dsl.Get<PostgreSqlSystem>());
+    }
+
+    /// <summary>
+    /// Access a named PostgreSQL system in a validation block.
+    /// </summary>
+    public static async Task PostgreSql(this ValidationDsl dsl, string name, Func<PostgreSqlSystem, Task> validation)
+    {
+        await validation(dsl.Get<PostgreSqlSystem>(name));
     }
 }

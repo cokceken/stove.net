@@ -14,10 +14,16 @@ public sealed class ValidationDsl
     }
 
     /// <summary>
-    /// Access a registered system by type. Used by extension methods like .Http(), .PostgreSql().
+    /// Access the default-named registered system by type.
+    /// Used by extension methods like .Http(), .PostgreSql().
     /// </summary>
     public TSystem Get<TSystem>() where TSystem : IPluggedSystem
-    {
-        return Stove.GetSystem<TSystem>();
-    }
+        => Stove.GetSystem<TSystem>();
+
+    /// <summary>
+    /// Access a named registered system by type.
+    /// Used when multiple instances of the same system type are registered.
+    /// </summary>
+    public TSystem Get<TSystem>(string name) where TSystem : IPluggedSystem
+        => Stove.GetSystem<TSystem>(name);
 }
