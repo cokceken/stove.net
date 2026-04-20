@@ -11,26 +11,20 @@ namespace Stove.Net.WireMock;
 /// WireMock system for Stove.Net. Manages an in-process WireMock HTTP mock server
 /// for intercepting external API calls made by the application under test.
 /// </summary>
-public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IExposesConfiguration
+public class WireMockSystem(WireMockSystemOptions options)
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
 {
+    private const string SystemName = "WireMock";
     private WireMockServer? _server;
+    private IStoveEventEmitter? _emitter;
 
-    /// <summary>
-    /// The underlying WireMock server instance. Use for full access to WireMock's
-    /// native fluent API (Given/RespondWith, scenarios, proxying, etc.).
-    /// Available after RunAsync().
-    /// </summary>
+    public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
+
     public WireMockServer Server => _server
-                                    ?? throw new InvalidOperationException(
-                                        "WireMock server is not started yet.");
+                                    ?? throw new InvalidOperationException("WireMock server is not started yet.");
 
-    /// <summary>
-    /// The base URL of the WireMock server (e.g., "http://localhost:12345").
-    /// Available after RunAsync().
-    /// </summary>
     public string Url => Server.Url
-                         ?? throw new InvalidOperationException(
-                             "WireMock server URL is not available.");
+                         ?? throw new InvalidOperationException("WireMock server URL is not available.");
 
     public Task RunAsync()
     {
@@ -43,10 +37,7 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
     public Task CleanupAsync()
     {
         if (options.ResetOnCleanup && _server != null)
-        {
             _server.ResetLogEntries();
-        }
-
         return Task.CompletedTask;
     }
 
@@ -56,32 +47,19 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
             return options.ConfigureExposedConfiguration(_server.Url);
 
         if (_server?.Url != null)
-        {
-            return
-            [
-                new KeyValuePair<string, string>("WireMock:Url", _server.Url)
-            ];
-        }
+            return [new KeyValuePair<string, string>("WireMock:Url", _server.Url)];
 
         return [];
     }
 
     // --- Stub Setup ---
 
-    /// <summary>
-    /// Set up a request/response mapping using WireMock's fluent API.
-    /// Chainable — returns this WireMockSystem.
-    /// </summary>
     public WireMockSystem Setup(Action<WireMockServer> configure)
     {
         configure(Server);
         return this;
     }
 
-    /// <summary>
-    /// Set up a stub: when a request matches, respond with the given response.
-    /// Convenience method wrapping WireMock's Given/RespondWith.
-    /// </summary>
     public WireMockSystem Stub(IRequestBuilder request, IResponseBuilder response)
     {
         Server.Given(request).RespondWith(response);
@@ -90,49 +68,25 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
 
     // --- Fault / Delay Stubs ---
 
-    /// <summary>
-    /// Stub a delayed response. The server will wait the specified duration
-    /// before sending the response. Useful for testing timeout handling.
-    /// </summary>
-    public WireMockSystem StubWithDelay(
-        string path,
-        string httpMethod,
-        int statusCode,
-        TimeSpan delay,
-        string? body = null)
+    public WireMockSystem StubWithDelay(string path, string httpMethod, int statusCode, TimeSpan delay, string? body = null)
     {
         Server.WithMapping(new MappingModel
         {
             Request = new RequestModel { Path = path, Methods = [httpMethod] },
-            Response = new ResponseModel
-            {
-                StatusCode = statusCode,
-                Body = body,
-                Delay = (int)delay.TotalMilliseconds
-            }
+            Response = new ResponseModel { StatusCode = statusCode, Body = body, Delay = (int)delay.TotalMilliseconds }
         });
         return this;
     }
 
-    /// <summary>
-    /// Stub a delayed response with a random delay between min and max.
-    /// Useful for simulating realistic variable-latency external APIs.
-    /// </summary>
-    public WireMockSystem StubWithRandomDelay(
-        string path,
-        string httpMethod,
-        int statusCode,
-        TimeSpan minDelay,
-        TimeSpan maxDelay,
-        string? body = null)
+    public WireMockSystem StubWithRandomDelay(string path, string httpMethod, int statusCode,
+        TimeSpan minDelay, TimeSpan maxDelay, string? body = null)
     {
         Server.WithMapping(new MappingModel
         {
             Request = new RequestModel { Path = path, Methods = [httpMethod] },
             Response = new ResponseModel
             {
-                StatusCode = statusCode,
-                Body = body,
+                StatusCode = statusCode, Body = body,
                 MinimumRandomDelay = (int)minDelay.TotalMilliseconds,
                 MaximumRandomDelay = (int)maxDelay.TotalMilliseconds
             }
@@ -140,23 +94,12 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
         return this;
     }
 
-    /// <summary>
-    /// Stub a fault response. The server will inject the specified fault type
-    /// instead of returning a normal response.
-    /// Use <see cref="FaultType.EMPTY_RESPONSE"/> or <see cref="FaultType.MALFORMED_RESPONSE_CHUNK"/>.
-    /// </summary>
-    public WireMockSystem StubFault(
-        string path,
-        string httpMethod,
-        FaultType faultType)
+    public WireMockSystem StubFault(string path, string httpMethod, FaultType faultType)
     {
         Server.WithMapping(new MappingModel
         {
             Request = new RequestModel { Path = path, Methods = [httpMethod] },
-            Response = new ResponseModel
-            {
-                Fault = new FaultModel { Type = faultType.ToString() }
-            }
+            Response = new ResponseModel { Fault = new FaultModel { Type = faultType.ToString() } }
         });
         return this;
     }
@@ -164,57 +107,57 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
     // --- Assertions ---
 
     /// <summary>
-    /// Assert that the WireMock server received a specific number of requests matching the path and http method.
+    /// Core assertion: validates count and optionally inspects the request body of the last matching request.
+    /// All other ShouldHaveReceived overloads delegate to this method.
     /// </summary>
-    public WireMockSystem ShouldHaveReceived(string path, string httpMethod, int expectedCount,
-        Action<string?>? validate = null)
+    public WireMockSystem ShouldHaveReceivedBody(string path, string? httpMethod, Action<string?>? validate,
+        int expectedCount = 1)
     {
-        var matching = Server.LogEntries
-            .Where(e => string.Equals(e.RequestMessage?.Path, path, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(e.RequestMessage?.Method, httpMethod, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (matching.Count != expectedCount)
+        try
         {
-            throw new InvalidOperationException(
-                $"Expected WireMock to have received {expectedCount} request(s) to [{httpMethod}] '{path}', " +
-                $"but received {matching.Count}. " +
-                FormatReceivedSummary());
-        }
+            var matching = Server.LogEntries
+                .Where(e => string.Equals(e.RequestMessage?.Path, path, StringComparison.OrdinalIgnoreCase) &&
+                            (httpMethod == null ||
+                             string.Equals(e.RequestMessage?.Method, httpMethod, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
 
-        if (validate != null)
-        {
-            var last = matching.MaxBy(e => e.RequestMessage?.DateTime);
-            validate(last?.RequestMessage?.Body);
+            if (matching.Count != expectedCount)
+            {
+                throw new InvalidOperationException(
+                    $"Expected WireMock to have received {expectedCount} request(s) to [{httpMethod ?? "*"}] '{path}', " +
+                    $"but received {matching.Count}. " + FormatReceivedSummary());
+            }
+
+            if (validate != null)
+            {
+                var last = matching.MaxBy(e => e.RequestMessage?.DateTime);
+                validate(last?.RequestMessage?.Body);
+            }
+
+            Emit("ShouldHaveReceived", $"{httpMethod} {path}", $"{matching.Count} request(s)");
         }
+        catch (Exception ex) when (EmitFailure("ShouldHaveReceived", $"{httpMethod} {path}", ex)) { }
 
         return this;
     }
 
-    /// <summary>
-    /// Assert that the WireMock server received a specific number of requests matching the path and http method.
-    /// </summary>
+    public WireMockSystem ShouldHaveReceived(string path, string httpMethod, int expectedCount,
+        Action<string?>? validate = null) =>
+        ShouldHaveReceivedBody(path, httpMethod, validate, expectedCount);
+
     public WireMockSystem ShouldHaveReceived(string path, string httpMethod, Action<string?> validate) =>
-        ShouldHaveReceived(path, httpMethod, 1, validate);
+        ShouldHaveReceivedBody(path, httpMethod, validate, 1);
 
-    /// <summary>
-    /// Assert that the WireMock server received only one request matching the path and http method.
-    /// </summary>
     public WireMockSystem ShouldHaveReceived(string path, string httpMethod) =>
-        ShouldHaveReceived(path, httpMethod, 1);
+        ShouldHaveReceivedBody(path, httpMethod, null, 1);
 
-    /// <summary>
-    /// Assert that the WireMock server did not receive any request matching the path and http method.
-    /// </summary>
     public WireMockSystem ShouldNotHaveReceived(string path, string httpMethod) =>
-        ShouldHaveReceived(path, httpMethod, 0);
+        ShouldHaveReceivedBody(path, httpMethod, null, 0);
 
     private string FormatReceivedSummary()
     {
         var entries = Server.LogEntries.ToList();
-        if (entries.Count == 0)
-            return "No requests were received by WireMock.";
-
+        if (entries.Count == 0) return "No requests were received by WireMock.";
         var paths = entries
             .GroupBy(e => $"{e.RequestMessage?.Method} {e.RequestMessage?.Path}")
             .Select(g => $"  {g.Key}: {g.Count()} request(s)");
@@ -226,5 +169,22 @@ public class WireMockSystem(WireMockSystemOptions options) : IPluggedSystem, IEx
         _server?.Stop();
         _server?.Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    private void Emit(string action, string? input, string? output)
+        => _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Success, Input = input, Output = output
+        });
+
+    private bool EmitFailure(string action, string? input, Exception ex)
+    {
+        _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Failed, Input = input, Error = ex.Message
+        });
+        return false;
     }
 }

@@ -10,25 +10,17 @@ public sealed class StoveBuilder
 
     private StoveBuilder() { }
 
-    /// <summary>
-    /// Create a new StoveBuilder to configure and run a test environment.
-    /// </summary>
+    /// <summary>Create a new StoveBuilder to configure and run a test environment.</summary>
     public static StoveBuilder Create() => new();
 
-    /// <summary>
-    /// Register a plugged system with the default name.
-    /// Typically called by .WithXxx() extension methods.
-    /// </summary>
+    /// <summary>Register a plugged system with the default name.</summary>
     public StoveBuilder WithSystem<TSystem>(TSystem system) where TSystem : IPluggedSystem
     {
         Instance.Register(system);
         return this;
     }
 
-    /// <summary>
-    /// Register a named plugged system. Use this when you need multiple instances
-    /// of the same type (e.g., two PostgreSQL databases).
-    /// </summary>
+    /// <summary>Register a named plugged system.</summary>
     public StoveBuilder WithSystem<TSystem>(TSystem system, string name) where TSystem : IPluggedSystem
     {
         Instance.Register(system, name);
@@ -36,9 +28,24 @@ public sealed class StoveBuilder
     }
 
     /// <summary>
-    /// Start all registered systems and return the configured Stove instance.
-    /// Call this after all .WithXxx() registrations.
+    /// Add an event listener that receives lifecycle and per-operation events from all systems.
     /// </summary>
+    public StoveBuilder WithListener(IStoveEventListener listener)
+    {
+        Instance.AddListener(listener);
+        return this;
+    }
+
+    /// <summary>
+    /// Enable the built-in console reporter. Prints a structured line per DSL action.
+    /// </summary>
+    public StoveBuilder WithConsoleReporter()
+    {
+        Instance.AddListener(new ConsoleEventListener());
+        return this;
+    }
+
+    /// <summary>Start all registered systems and return the configured Stove instance.</summary>
     public async Task<StoveInstance> RunAsync()
     {
         await Instance.RunSystemsAsync();

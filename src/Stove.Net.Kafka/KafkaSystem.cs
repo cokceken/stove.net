@@ -12,20 +12,22 @@ namespace Stove.Net.Kafka;
 /// a background consumer for capturing published messages, and provides
 /// publish/assertion methods.
 /// </summary>
-public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesConfiguration
+public class KafkaSystem(KafkaSystemOptions options)
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
 {
+    private const string SystemName = "Kafka";
     private KafkaContainer? _container;
     private string? _bootstrapServers;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<CapturedMessage>> _messagesByTopic = new();
     private CancellationTokenSource? _consumerCts;
     private Task? _consumerTask;
+    private IStoveEventEmitter? _emitter;
 
-    /// <summary>
-    /// The container's bootstrap servers address, available after RunAsync().
-    /// </summary>
+    public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
+
+    /// <summary>The container's bootstrap servers address, available after RunAsync().</summary>
     public string BootstrapServers => _bootstrapServers
-                                      ?? throw new InvalidOperationException(
-                                          "Kafka container is not started yet.");
+                                      ?? throw new InvalidOperationException("Kafka container is not started yet.");
 
     public async Task RunAsync()
     {
@@ -49,210 +51,162 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
             return options.ConfigureExposedConfiguration(_bootstrapServers);
 
         if (_bootstrapServers != null)
-        {
-            return
-            [
-                new KeyValuePair<string, string>("Kafka:BootstrapServers", _bootstrapServers)
-            ];
-        }
+            return [new KeyValuePair<string, string>("Kafka:BootstrapServers", _bootstrapServers)];
 
         return [];
     }
 
     // --- Publish ---
 
-    /// <summary>
-    /// Publish a message to a Kafka topic.
-    /// </summary>
     public async Task<KafkaSystem> PublishAsync<T>(
-        string topic,
-        T message,
-        string? key = null,
-        Dictionary<string, string>? headers = null)
+        string topic, T message, string? key = null, Dictionary<string, string>? headers = null)
     {
-        var config = new ProducerConfig { BootstrapServers = BootstrapServers };
-        using var producer = new ProducerBuilder<string?, string>(config).Build();
-
-        var value = JsonSerializer.Serialize(message);
-        var kafkaMessage = new Message<string?, string>
+        try
         {
-            Key = key,
-            Value = value
-        };
+            var config = new ProducerConfig { BootstrapServers = BootstrapServers };
+            using var producer = new ProducerBuilder<string?, string>(config).Build();
 
-        if (headers != null)
-        {
-            kafkaMessage.Headers = new Headers();
-            foreach (var (k, v) in headers)
-                kafkaMessage.Headers.Add(k, System.Text.Encoding.UTF8.GetBytes(v));
+            var value = JsonSerializer.Serialize(message);
+            var kafkaMessage = new Message<string?, string> { Key = key, Value = value };
+
+            if (headers != null)
+            {
+                kafkaMessage.Headers = new Headers();
+                foreach (var (k, v) in headers)
+                    kafkaMessage.Headers.Add(k, System.Text.Encoding.UTF8.GetBytes(v));
+            }
+
+            await producer.ProduceAsync(topic, kafkaMessage);
+            producer.Flush(TimeSpan.FromSeconds(5));
+            Emit("Publish", $"{topic}:{key}", value);
         }
-
-        await producer.ProduceAsync(topic, kafkaMessage);
-        producer.Flush(TimeSpan.FromSeconds(5));
+        catch (Exception ex) when (EmitFailure("Publish", topic, ex)) { }
 
         return this;
     }
 
     // --- Message History ---
 
-    /// <summary>
-    /// Returns the total number of captured messages across all topics.
-    /// </summary>
     public int CapturedMessageCount => _messagesByTopic.Values.Sum(q => q.Count);
 
-    /// <summary>
-    /// Returns a snapshot of all captured messages grouped by topic.
-    /// Useful for diagnostics and debugging failed assertions.
-    /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<CapturedMessage>> GetCapturedMessages() =>
-        _messagesByTopic.ToDictionary(
-            kvp => kvp.Key, IReadOnlyList<CapturedMessage> (kvp) => kvp.Value.ToArray());
+        _messagesByTopic.ToDictionary(kvp => kvp.Key, IReadOnlyList<CapturedMessage> (kvp) => kvp.Value.ToArray());
 
     // --- Assertions ---
 
-    /// <summary>
-    /// Assert that a message matching the predicate was published to any consumed topic.
-    /// The background consumer captures all messages into a topic-keyed history;
-    /// this method polls the history until a match is found or the timeout expires.
-    /// </summary>
-    public async Task<KafkaSystem> ShouldBePublished<T>(
-        Func<T, bool> predicate,
-        TimeSpan? timeout = null)
+    public async Task<KafkaSystem> ShouldBePublished<T>(Func<T, bool> predicate, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow + (timeout ?? options.AssertionTimeout);
-        var pollInterval = TimeSpan.FromMilliseconds(200);
-
-        while (DateTime.UtcNow < deadline)
+        try
         {
-            foreach (var queue in _messagesByTopic.Values)
+            var deadline = DateTime.UtcNow + (timeout ?? options.AssertionTimeout);
+            var pollInterval = TimeSpan.FromMilliseconds(200);
+
+            while (DateTime.UtcNow < deadline)
             {
-                foreach (var msg in queue)
+                foreach (var queue in _messagesByTopic.Values)
                 {
-                    try
+                    foreach (var msg in queue)
                     {
-                        var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
-                        if (deserialized != null && predicate(deserialized))
-                            return this;
-                    }
-                    catch (JsonException)
-                    {
-                        // Message doesn't deserialize to T — continue scanning
+                        try
+                        {
+                            var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
+                            if (deserialized != null && predicate(deserialized))
+                            {
+                                Emit("ShouldBePublished", typeof(T).Name, $"found on {msg.Topic}");
+                                return this;
+                            }
+                        }
+                        catch (JsonException) { }
                     }
                 }
+                await Task.Delay(pollInterval);
             }
 
-            await Task.Delay(pollInterval);
+            throw new InvalidOperationException(
+                $"No message of type {typeof(T).Name} matching the predicate was found within {(timeout ?? options.AssertionTimeout).TotalSeconds}s. " +
+                FormatCapturedSummary());
         }
+        catch (Exception ex) when (EmitFailure("ShouldBePublished", typeof(T).Name, ex)) { }
 
-        throw new InvalidOperationException(
-            $"No message of type {typeof(T).Name} matching the predicate was found within {(timeout ?? options.AssertionTimeout).TotalSeconds}s. " +
-            FormatCapturedSummary());
+        return this;
     }
 
-    /// <summary>
-    /// Assert that a message matching the predicate was published to a specific topic.
-    /// Only scans messages captured on the given topic (O(1) topic lookup).
-    /// </summary>
     public async Task<KafkaSystem> ShouldBePublished<T>(
-        string topic,
-        Func<T, bool> predicate,
-        TimeSpan? timeout = null)
+        string topic, Func<T, bool> predicate, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow + (timeout ?? options.AssertionTimeout);
-        var pollInterval = TimeSpan.FromMilliseconds(200);
-
-        while (DateTime.UtcNow < deadline)
+        try
         {
-            if (_messagesByTopic.TryGetValue(topic, out var queue))
+            var deadline = DateTime.UtcNow + (timeout ?? options.AssertionTimeout);
+            var pollInterval = TimeSpan.FromMilliseconds(200);
+
+            while (DateTime.UtcNow < deadline)
             {
-                foreach (var msg in queue)
+                if (_messagesByTopic.TryGetValue(topic, out var queue))
                 {
-                    try
+                    foreach (var msg in queue)
                     {
-                        var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
-                        if (deserialized != null && predicate(deserialized))
-                            return this;
-                    }
-                    catch (JsonException)
-                    {
-                        // Message doesn't deserialize to T — continue scanning
+                        try
+                        {
+                            var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
+                            if (deserialized != null && predicate(deserialized))
+                            {
+                                Emit("ShouldBePublished", $"{topic}:{typeof(T).Name}", "found");
+                                return this;
+                            }
+                        }
+                        catch (JsonException) { }
                     }
                 }
+                await Task.Delay(pollInterval);
             }
 
-            await Task.Delay(pollInterval);
+            var topicCount = _messagesByTopic.TryGetValue(topic, out var q) ? q.Count : 0;
+            throw new InvalidOperationException(
+                $"No message of type {typeof(T).Name} matching the predicate was found on topic '{topic}' within {(timeout ?? options.AssertionTimeout).TotalSeconds}s. " +
+                $"Topic '{topic}' has {topicCount} message(s). " +
+                FormatCapturedSummary());
         }
+        catch (Exception ex) when (EmitFailure("ShouldBePublished", $"{topic}:{typeof(T).Name}", ex)) { }
 
-        var topicCount = _messagesByTopic.TryGetValue(topic, out var q) ? q.Count : 0;
-        throw new InvalidOperationException(
-            $"No message of type {typeof(T).Name} matching the predicate was found on topic '{topic}' within {(timeout ?? options.AssertionTimeout).TotalSeconds}s. " +
-            $"Topic '{topic}' has {topicCount} message(s). " +
-            FormatCapturedSummary());
+        return this;
     }
 
     private string FormatCapturedSummary()
     {
-        if (_messagesByTopic.IsEmpty)
-            return "No messages were captured on any topic.";
-
+        if (_messagesByTopic.IsEmpty) return "No messages were captured on any topic.";
         var topicSummaries = _messagesByTopic.Select(kvp => $"  {kvp.Key}: {kvp.Value.Count} message(s)");
         return $"Captured messages by topic:\n{string.Join("\n", topicSummaries)}";
     }
 
     // --- Fault Injection ---
 
-    /// <summary>
-    /// Stop the Kafka broker container. Simulates broker unavailability.
-    /// While stopped, publish and consume operations will fail.
-    /// Call <see cref="StartBroker"/> to restore.
-    /// </summary>
     public async Task<KafkaSystem> StopBroker()
     {
-        if (_container == null)
-            throw new InvalidOperationException("Kafka container is not started yet.");
+        if (_container == null) throw new InvalidOperationException("Kafka container is not started yet.");
         await _container.StopAsync();
         return this;
     }
 
-    /// <summary>
-    /// Start the Kafka broker container after it was stopped.
-    /// The consumer will need to reconnect, which may take a few seconds.
-    /// </summary>
     public async Task<KafkaSystem> StartBroker()
     {
-        if (_container == null)
-            throw new InvalidOperationException("Kafka container is not started yet.");
+        if (_container == null) throw new InvalidOperationException("Kafka container is not started yet.");
         await _container.StartAsync();
         return this;
     }
 
-    /// <summary>
-    /// Pause the Kafka broker container. Freezes all processes inside the container,
-    /// simulating a completely unresponsive broker (connections hang, no timeouts).
-    /// Call <see cref="UnpauseBroker"/> to resume.
-    /// </summary>
     public async Task<KafkaSystem> PauseBroker()
     {
-        if (_container == null)
-            throw new InvalidOperationException("Kafka container is not started yet.");
-
+        if (_container == null) throw new InvalidOperationException("Kafka container is not started yet.");
         var result = await _container.ExecAsync(["bash", "-c", "kill -STOP 1"]);
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Failed to pause Kafka broker: {result.Stderr}");
+        if (result.ExitCode != 0) throw new InvalidOperationException($"Failed to pause Kafka broker: {result.Stderr}");
         return this;
     }
 
-    /// <summary>
-    /// Unpause the Kafka broker container after a <see cref="PauseBroker"/> call.
-    /// </summary>
     public async Task<KafkaSystem> UnpauseBroker()
     {
-        if (_container == null)
-            throw new InvalidOperationException("Kafka container is not started yet.");
-
+        if (_container == null) throw new InvalidOperationException("Kafka container is not started yet.");
         var result = await _container.ExecAsync(["bash", "-c", "kill -CONT 1"]);
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Failed to unpause Kafka broker: {result.Stderr}");
+        if (result.ExitCode != 0) throw new InvalidOperationException($"Failed to unpause Kafka broker: {result.Stderr}");
         return this;
     }
 
@@ -287,16 +241,11 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
                         {
                             var queue = _messagesByTopic.GetOrAdd(result.Topic, _ => new ConcurrentQueue<CapturedMessage>());
                             queue.Enqueue(new CapturedMessage(
-                                result.Topic,
-                                result.Message.Key,
-                                result.Message.Value,
+                                result.Topic, result.Message.Key, result.Message.Value,
                                 result.Message.Timestamp.UtcDateTime));
                         }
                     }
-                    catch (ConsumeException)
-                    {
-                        // Transient error — keep consuming
-                    }
+                    catch (ConsumeException) { }
                 }
             }
             finally
@@ -305,7 +254,6 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
             }
         }, ct);
 
-        // Give the consumer time to subscribe and start polling
         Task.Delay(1000, ct).Wait(ct);
     }
 
@@ -316,21 +264,30 @@ public class KafkaSystem(KafkaSystemOptions options) : IPluggedSystem, IExposesC
             await _consumerCts.CancelAsync();
             if (_consumerTask != null)
             {
-                try
-                {
-                    await _consumerTask;
-                }
-                catch (OperationCanceledException)
-                {
-                    //ignore
-                }
+                try { await _consumerTask; }
+                catch (OperationCanceledException) { }
             }
-
             _consumerCts.Dispose();
         }
 
-        if (_container != null)
-            await _container.DisposeAsync();
+        if (_container != null) await _container.DisposeAsync();
+    }
+
+    private void Emit(string action, string? input, string? output)
+        => _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Success, Input = input, Output = output
+        });
+
+    private bool EmitFailure(string action, string? input, Exception ex)
+    {
+        _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Failed, Input = input, Error = ex.Message
+        });
+        return false;
     }
 
     public sealed record CapturedMessage(string Topic, string? Key, string Value, DateTime Timestamp);

@@ -10,37 +10,28 @@ namespace Stove.Net.MongoDb;
 /// MongoDB system using Testcontainers. Manages a MongoDB container
 /// and provides insert/find/assertion methods for e2e testing.
 /// </summary>
-public class MongoDbSystem(MongoDbSystemOptions options) : IPluggedSystem, IExposesConfiguration
+public class MongoDbSystem(MongoDbSystemOptions options)
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
 {
+    private const string SystemName = "MongoDb";
     private MongoDbContainer? _container;
     private string? _connectionString;
     private MongoClient? _client;
+    private IStoveEventEmitter? _emitter;
 
-    /// <summary>
-    /// The container's connection string, available after RunAsync().
-    /// </summary>
+    public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
+
     public string ConnectionString => _connectionString
-                                      ?? throw new InvalidOperationException(
-                                          "MongoDB container is not started yet.");
+                                      ?? throw new InvalidOperationException("MongoDB container is not started yet.");
 
-    /// <summary>
-    /// The underlying MongoClient. Use for full access to MongoDB's driver API.
-    /// Available after RunAsync().
-    /// </summary>
     public MongoClient Client => _client
-                                 ?? throw new InvalidOperationException(
-                                     "MongoDB container is not started yet.");
+                                 ?? throw new InvalidOperationException("MongoDB container is not started yet.");
 
-    /// <summary>
-    /// The default database configured via options. Available after RunAsync().
-    /// </summary>
     public IMongoDatabase Database => Client.GetDatabase(options.DatabaseName);
 
     public async Task RunAsync()
     {
-        _container = new MongoDbBuilder(new DockerImage("mongo:7"))
-            .Build();
-
+        _container = new MongoDbBuilder(new DockerImage("mongo:7")).Build();
         await _container.StartAsync();
         _connectionString = _container.GetConnectionString();
         _client = new MongoClient(_connectionString);
@@ -58,12 +49,7 @@ public class MongoDbSystem(MongoDbSystemOptions options) : IPluggedSystem, IExpo
             return options.ConfigureExposedConfiguration(_connectionString);
 
         if (_connectionString != null)
-        {
-            return
-            [
-                new KeyValuePair<string, string>("MongoDb:ConnectionString", _connectionString)
-            ];
-        }
+            return [new KeyValuePair<string, string>("MongoDb:ConnectionString", _connectionString)];
 
         return [];
     }
@@ -73,125 +59,141 @@ public class MongoDbSystem(MongoDbSystemOptions options) : IPluggedSystem, IExpo
 
     // --- Insert ---
 
-    /// <summary>
-    /// Insert a single document into a collection.
-    /// </summary>
     public async Task<MongoDbSystem> InsertAsync<T>(string collection, T document)
     {
-        await GetCollection<T>(collection).InsertOneAsync(document);
+        try
+        {
+            await GetCollection<T>(collection).InsertOneAsync(document);
+            Emit("Insert", collection, "ok");
+        }
+        catch (Exception ex) when (EmitFailure("Insert", collection, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Insert multiple documents into a collection.
-    /// </summary>
     public async Task<MongoDbSystem> InsertManyAsync<T>(string collection, IEnumerable<T> documents)
     {
-        await GetCollection<T>(collection).InsertManyAsync(documents);
+        try
+        {
+            var list = documents.ToList();
+            await GetCollection<T>(collection).InsertManyAsync(list);
+            Emit("InsertMany", collection, $"{list.Count} doc(s)");
+        }
+        catch (Exception ex) when (EmitFailure("InsertMany", collection, ex)) { }
         return this;
     }
 
     // --- Query ---
 
-    /// <summary>
-    /// Find documents matching a filter and validate them.
-    /// </summary>
     public async Task<MongoDbSystem> ShouldFind<T>(
-        string collection,
-        Expression<Func<T, bool>> filter,
-        Action<List<T>> validate)
+        string collection, Expression<Func<T, bool>> filter, Action<List<T>> validate)
     {
-        var results = await GetCollection<T>(collection)
-            .Find(filter)
-            .ToListAsync();
-
-        validate(results);
+        try
+        {
+            var results = await GetCollection<T>(collection).Find(filter).ToListAsync();
+            validate(results);
+            Emit("ShouldFind", collection, $"{results.Count} doc(s)");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldFind", collection, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Find all documents in a collection and validate them.
-    /// </summary>
-    public async Task<MongoDbSystem> ShouldFindAll<T>(
-        string collection,
-        Action<List<T>> validate)
+    public async Task<MongoDbSystem> ShouldFindAll<T>(string collection, Action<List<T>> validate)
     {
-        var results = await GetCollection<T>(collection)
-            .Find(_ => true)
-            .ToListAsync();
-
-        validate(results);
+        try
+        {
+            var results = await GetCollection<T>(collection).Find(_ => true).ToListAsync();
+            validate(results);
+            Emit("ShouldFindAll", collection, $"{results.Count} doc(s)");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldFindAll", collection, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Assert that a document matching the filter exists in the collection.
-    /// </summary>
-    public async Task<MongoDbSystem> ShouldExist<T>(
-        string collection,
-        Expression<Func<T, bool>> filter)
+    public async Task<MongoDbSystem> ShouldExist<T>(string collection, Expression<Func<T, bool>> filter)
     {
-        var count = await GetCollection<T>(collection).CountDocumentsAsync(filter);
-        if (count == 0)
-            throw new InvalidOperationException(
-                $"Expected a document matching the filter to exist in '{collection}', but none were found.");
+        try
+        {
+            var count = await GetCollection<T>(collection).CountDocumentsAsync(filter);
+            if (count == 0)
+                throw new InvalidOperationException(
+                    $"Expected a document matching the filter to exist in '{collection}', but none were found.");
+            Emit("ShouldExist", collection, $"{count} doc(s)");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldExist", collection, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Assert that no document matching the filter exists in the collection.
-    /// </summary>
-    public async Task<MongoDbSystem> ShouldNotExist<T>(
-        string collection,
-        Expression<Func<T, bool>> filter)
+    public async Task<MongoDbSystem> ShouldNotExist<T>(string collection, Expression<Func<T, bool>> filter)
     {
-        var count = await GetCollection<T>(collection).CountDocumentsAsync(filter);
-        if (count > 0)
-            throw new InvalidOperationException(
-                $"Expected no documents matching the filter in '{collection}', but found {count}.");
+        try
+        {
+            var count = await GetCollection<T>(collection).CountDocumentsAsync(filter);
+            if (count > 0)
+                throw new InvalidOperationException(
+                    $"Expected no documents matching the filter in '{collection}', but found {count}.");
+            Emit("ShouldNotExist", collection, "0 doc(s)");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldNotExist", collection, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Count documents matching a filter and validate the count.
-    /// </summary>
     public async Task<MongoDbSystem> ShouldCount<T>(
-        string collection,
-        Expression<Func<T, bool>> filter,
-        Action<long> validate)
+        string collection, Expression<Func<T, bool>> filter, Action<long> validate)
     {
-        var count = await GetCollection<T>(collection).CountDocumentsAsync(filter);
-        validate(count);
+        try
+        {
+            var count = await GetCollection<T>(collection).CountDocumentsAsync(filter);
+            validate(count);
+            Emit("ShouldCount", collection, $"{count}");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldCount", collection, ex)) { }
         return this;
     }
 
     // --- Delete ---
 
-    /// <summary>
-    /// Delete documents matching a filter.
-    /// </summary>
-    public async Task<MongoDbSystem> DeleteAsync<T>(
-        string collection,
-        Expression<Func<T, bool>> filter)
+    public async Task<MongoDbSystem> DeleteAsync<T>(string collection, Expression<Func<T, bool>> filter)
     {
-        await GetCollection<T>(collection).DeleteManyAsync(filter);
+        try
+        {
+            var result = await GetCollection<T>(collection).DeleteManyAsync(filter);
+            Emit("Delete", collection, $"{result.DeletedCount} deleted");
+        }
+        catch (Exception ex) when (EmitFailure("Delete", collection, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Drop an entire collection.
-    /// </summary>
     public async Task<MongoDbSystem> DropCollectionAsync(string collection)
     {
-        await Database.DropCollectionAsync(collection);
+        try
+        {
+            await Database.DropCollectionAsync(collection);
+            Emit("DropCollection", collection, "ok");
+        }
+        catch (Exception ex) when (EmitFailure("DropCollection", collection, ex)) { }
         return this;
     }
 
     public async ValueTask DisposeAsync()
     {
         _client?.Dispose();
+        if (_container != null) await _container.DisposeAsync();
+    }
 
-        if (_container != null)
-            await _container.DisposeAsync();
+    private void Emit(string action, string? input, string? output)
+        => _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Success, Input = input, Output = output
+        });
+
+    private bool EmitFailure(string action, string? input, Exception ex)
+    {
+        _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Failed, Input = input, Error = ex.Message
+        });
+        return false;
     }
 }

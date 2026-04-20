@@ -9,14 +9,17 @@ namespace Stove.Net.PostgreSql;
 /// PostgreSQL system using Testcontainers. Manages a PostgreSQL container
 /// and provides query/execute assertion methods.
 /// </summary>
-public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem, IExposesConfiguration
+public class PostgreSqlSystem(PostgreSqlSystemOptions options)
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
 {
+    private const string SystemName = "PostgreSql";
     private PostgreSqlContainer? _container;
     private string? _connectionString;
+    private IStoveEventEmitter? _emitter;
 
-    /// <summary>
-    /// The container's connection string, available after RunAsync().
-    /// </summary>
+    public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
+
+    /// <summary>The container's connection string, available after RunAsync().</summary>
     public string ConnectionString => _connectionString
                                       ?? throw new InvalidOperationException(
                                           "PostgreSQL container is not started yet.");
@@ -60,81 +63,88 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem,
 
         if (_connectionString != null)
         {
-            return new[]
-            {
-                new KeyValuePair<string, string>("ConnectionStrings:DefaultConnection", _connectionString)
-            };
+            return [new KeyValuePair<string, string>("ConnectionStrings:DefaultConnection", _connectionString)];
         }
 
-        return Enumerable.Empty<KeyValuePair<string, string>>();
+        return [];
     }
 
     // --- Assertion methods ---
 
-    /// <summary>
-    /// Execute a query and validate the results using a mapper and assertion callback.
-    /// </summary>
+    /// <summary>Execute a query and validate the results using a mapper and assertion callback.</summary>
     public async Task<PostgreSqlSystem> ShouldQuery<T>(
         string sql,
         Func<NpgsqlDataReader, T> mapper,
         Action<List<T>> validate,
         object? parameters = null)
     {
-        await using var conn = new NpgsqlConnection(ConnectionString);
-        await conn.OpenAsync();
+        try
+        {
+            await using var conn = new NpgsqlConnection(ConnectionString);
+            await conn.OpenAsync();
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            if (parameters != null) AddParameters(cmd, parameters);
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        if (parameters != null)
-            AddParameters(cmd, parameters);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<T>();
+            while (await reader.ReadAsync()) results.Add(mapper(reader));
 
-        await using var reader = await cmd.ExecuteReaderAsync();
-        var results = new List<T>();
+            validate(results);
+            Emit("ShouldQuery", sql, $"{results.Count} row(s)");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldQuery", sql, ex))
+        {
+            // EmitFailure always returns false — exception re-thrown
+        }
 
-        while (await reader.ReadAsync())
-            results.Add(mapper(reader));
-
-        validate(results);
         return this;
     }
 
-    /// <summary>
-    /// Execute a SQL statement and optionally validate the number of affected rows.
-    /// </summary>
+    /// <summary>Execute a SQL statement and optionally validate the number of affected rows.</summary>
     public async Task<PostgreSqlSystem> ShouldExecute(
         string sql,
         Action<int>? validateAffectedRows = null,
         object? parameters = null)
     {
-        await using var conn = new NpgsqlConnection(ConnectionString);
-        await conn.OpenAsync();
+        try
+        {
+            await using var conn = new NpgsqlConnection(ConnectionString);
+            await conn.OpenAsync();
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            if (parameters != null) AddParameters(cmd, parameters);
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        if (parameters != null)
-            AddParameters(cmd, parameters);
-
-        var affected = await cmd.ExecuteNonQueryAsync();
-        validateAffectedRows?.Invoke(affected);
+            var affected = await cmd.ExecuteNonQueryAsync();
+            validateAffectedRows?.Invoke(affected);
+            Emit("ShouldExecute", sql, $"{affected} row(s) affected");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldExecute", sql, ex))
+        {
+        }
 
         return this;
     }
 
-    /// <summary>
-    /// Execute a query and validate the scalar result.
-    /// </summary>
+    /// <summary>Execute a query and validate the scalar result.</summary>
     public async Task<PostgreSqlSystem> ShouldQueryScalar<T>(
         string sql,
         Action<T?> validate,
         object? parameters = null)
     {
-        await using var conn = new NpgsqlConnection(ConnectionString);
-        await conn.OpenAsync();
+        try
+        {
+            await using var conn = new NpgsqlConnection(ConnectionString);
+            await conn.OpenAsync();
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            if (parameters != null) AddParameters(cmd, parameters);
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        if (parameters != null)
-            AddParameters(cmd, parameters);
-
-        var result = await cmd.ExecuteScalarAsync();
-        validate(result is T typed ? typed : default);
+            var result = await cmd.ExecuteScalarAsync();
+            var typed = result is T t ? t : default;
+            validate(typed);
+            Emit("ShouldQueryScalar", sql, typed?.ToString());
+        }
+        catch (Exception ex) when (EmitFailure("ShouldQueryScalar", sql, ex))
+        {
+        }
 
         return this;
     }
@@ -142,17 +152,13 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem,
     private static void AddParameters(NpgsqlCommand cmd, object parameters)
     {
         foreach (var prop in parameters.GetType().GetProperties())
-        {
             cmd.Parameters.AddWithValue($"@{prop.Name}", prop.GetValue(parameters) ?? DBNull.Value);
-        }
     }
 
     // --- Fault Injection ---
 
     /// <summary>
     /// Simulate a slow query by executing pg_sleep inside the database.
-    /// Blocks one connection for the specified duration.
-    /// Useful for testing query timeout handling in the application.
     /// </summary>
     public async Task<PostgreSqlSystem> SimulateSlowQuery(TimeSpan duration)
     {
@@ -164,17 +170,12 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem,
         return this;
     }
 
-    /// <summary>
-    /// Toggle read-only mode on the test database.
-    /// When enabled, any INSERT/UPDATE/DELETE on new connections will fail.
-    /// Useful for testing how the application handles read-only database scenarios.
-    /// </summary>
+    /// <summary>Toggle read-only mode on the test database.</summary>
     public async Task<PostgreSqlSystem> SetReadOnly(bool readOnly)
     {
         var builder = new NpgsqlConnectionStringBuilder(ConnectionString);
         var dbName = builder.Database;
 
-        // Connect to 'postgres' database (always writable) to alter the test database
         builder.Database = "postgres";
         await using var conn = new NpgsqlConnection(builder.ConnectionString);
         await conn.OpenAsync();
@@ -183,10 +184,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem,
         await using var cmd = new NpgsqlCommand(
             $"ALTER DATABASE \"{dbName}\" SET default_transaction_read_only = {mode}", conn);
         await cmd.ExecuteNonQueryAsync();
-
-        // Clear connection pools so new connections pick up the changed setting
         NpgsqlConnection.ClearAllPools();
-
         return this;
     }
 
@@ -194,5 +192,32 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options) : IPluggedSystem,
     {
         if (_container != null)
             await _container.DisposeAsync();
+    }
+
+    // --- Emit helpers ---
+
+    private void Emit(string action, string? input, string? output)
+        => _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId,
+            System = SystemName,
+            Action = action,
+            Result = EntryResult.Success,
+            Input = input,
+            Output = output
+        });
+
+    private bool EmitFailure(string action, string? input, Exception ex)
+    {
+        _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId,
+            System = SystemName,
+            Action = action,
+            Result = EntryResult.Failed,
+            Input = input,
+            Error = ex.Message
+        });
+        return false;
     }
 }

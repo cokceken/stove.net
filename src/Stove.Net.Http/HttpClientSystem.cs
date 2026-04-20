@@ -5,266 +5,204 @@ namespace Stove.Net.Http;
 
 /// <summary>
 /// HTTP client system for making requests and asserting responses.
-/// Wraps an HttpClient (typically from WebApplicationFactory).
-/// All methods return <see cref="HttpClientSystem"/> for chaining.
-/// Use the <c>validate</c> callback to inspect or extract data from responses.
+/// All methods return HttpClientSystem for chaining.
 /// </summary>
-public class HttpClientSystem : IPluggedSystem
+public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
 {
+    private const string SystemName = "Http";
     private HttpClient? _httpClient;
+    private IStoveEventEmitter? _emitter;
 
-    /// <summary>
-    /// Sets the underlying HttpClient. Called by the xUnit integration
-    /// after WebApplicationFactory creates the client.
-    /// </summary>
-    public void SetHttpClient(HttpClient client)
-    {
-        _httpClient = client;
-    }
+    public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
+
+    /// <summary>Sets the underlying HttpClient.</summary>
+    public void SetHttpClient(HttpClient client) => _httpClient = client;
 
     private HttpClient Client => _httpClient
                                  ?? throw new InvalidOperationException(
                                      "HttpClient is not set. Ensure WithWebApplication<T>() is configured.");
 
     public Task RunAsync() => Task.CompletedTask;
-
     public Task CleanupAsync() => Task.CompletedTask;
 
     // --- GET ---
 
-    /// <summary>
-    /// GET and deserialize the response body as <typeparamref name="TResponse"/>.
-    /// </summary>
     public async Task<HttpClientSystem> GetAsync<TResponse>(
-        string path,
-        Action<TResponse>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, path);
-        ApplyHeaders(request, headers);
-
-        var response = await Client.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        var body = await response.Content.ReadFromJsonAsync<TResponse>()
-                   ?? throw new InvalidOperationException(
-                       $"Failed to deserialize response body to {typeof(TResponse).Name}");
-        validate?.Invoke(body);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            ApplyHeaders(request, headers);
+            var response = await Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadFromJsonAsync<TResponse>()
+                       ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            validate?.Invoke(body);
+            Emit("GET", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("GET", path, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// GET with access to the raw <see cref="HttpResponseMessage"/>.
-    /// </summary>
     public async Task<HttpClientSystem> GetAsync(
-        string path,
-        Action<HttpResponseMessage>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, path);
-        ApplyHeaders(request, headers);
-
-        var response = await Client.SendAsync(request);
-
-        if (validate != null)
-            validate(response);
-        else
-            response.EnsureSuccessStatusCode();
-
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            ApplyHeaders(request, headers);
+            var response = await Client.SendAsync(request);
+            if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
+            Emit("GET", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("GET", path, ex)) { }
         return this;
     }
 
     // --- POST ---
 
-    /// <summary>
-    /// POST and deserialize the response body as <typeparamref name="TResponse"/>.
-    /// </summary>
     public async Task<HttpClientSystem> PostAsync<TResponse>(
-        string path,
-        object? body = null,
-        Action<TResponse>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, path);
-        ApplyHeaders(request, headers);
-        if (body != null)
-            request.Content = JsonContent.Create(body);
-
-        var response = await Client.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
-                           ?? throw new InvalidOperationException(
-                               $"Failed to deserialize response body to {typeof(TResponse).Name}");
-        validate?.Invoke(responseBody);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            ApplyHeaders(request, headers);
+            if (body != null) request.Content = JsonContent.Create(body);
+            var response = await Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
+                               ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            validate?.Invoke(responseBody);
+            Emit("POST", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("POST", path, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// POST with access to the raw <see cref="HttpResponseMessage"/>.
-    /// </summary>
     public async Task<HttpClientSystem> PostAsync(
-        string path,
-        object? body = null,
-        Action<HttpResponseMessage>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, path);
-        ApplyHeaders(request, headers);
-        if (body != null)
-            request.Content = JsonContent.Create(body);
-
-        var response = await Client.SendAsync(request);
-
-        if (validate != null)
-            validate(response);
-        else
-            response.EnsureSuccessStatusCode();
-
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            ApplyHeaders(request, headers);
+            if (body != null) request.Content = JsonContent.Create(body);
+            var response = await Client.SendAsync(request);
+            if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
+            Emit("POST", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("POST", path, ex)) { }
         return this;
     }
 
     // --- PUT ---
 
-    /// <summary>
-    /// PUT and deserialize the response body as <typeparamref name="TResponse"/>.
-    /// </summary>
     public async Task<HttpClientSystem> PutAsync<TResponse>(
-        string path,
-        object? body = null,
-        Action<TResponse>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Put, path);
-        ApplyHeaders(request, headers);
-        if (body != null)
-            request.Content = JsonContent.Create(body);
-
-        var response = await Client.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
-                           ?? throw new InvalidOperationException(
-                               $"Failed to deserialize response body to {typeof(TResponse).Name}");
-        validate?.Invoke(responseBody);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Put, path);
+            ApplyHeaders(request, headers);
+            if (body != null) request.Content = JsonContent.Create(body);
+            var response = await Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
+                               ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            validate?.Invoke(responseBody);
+            Emit("PUT", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("PUT", path, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// PUT with access to the raw <see cref="HttpResponseMessage"/>.
-    /// </summary>
     public async Task<HttpClientSystem> PutAsync(
-        string path,
-        object? body = null,
-        Action<HttpResponseMessage>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Put, path);
-        ApplyHeaders(request, headers);
-        if (body != null)
-            request.Content = JsonContent.Create(body);
-
-        var response = await Client.SendAsync(request);
-
-        if (validate != null)
-            validate(response);
-        else
-            response.EnsureSuccessStatusCode();
-
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Put, path);
+            ApplyHeaders(request, headers);
+            if (body != null) request.Content = JsonContent.Create(body);
+            var response = await Client.SendAsync(request);
+            if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
+            Emit("PUT", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("PUT", path, ex)) { }
         return this;
     }
 
     // --- DELETE ---
 
-    /// <summary>
-    /// DELETE and deserialize the response body as <typeparamref name="TResponse"/>.
-    /// </summary>
     public async Task<HttpClientSystem> DeleteAsync<TResponse>(
-        string path,
-        Action<TResponse>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Delete, path);
-        ApplyHeaders(request, headers);
-
-        var response = await Client.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        var body = await response.Content.ReadFromJsonAsync<TResponse>()
-                   ?? throw new InvalidOperationException(
-                       $"Failed to deserialize response body to {typeof(TResponse).Name}");
-        validate?.Invoke(body);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Delete, path);
+            ApplyHeaders(request, headers);
+            var response = await Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadFromJsonAsync<TResponse>()
+                       ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            validate?.Invoke(body);
+            Emit("DELETE", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("DELETE", path, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// DELETE with access to the raw <see cref="HttpResponseMessage"/>.
-    /// </summary>
     public async Task<HttpClientSystem> DeleteAsync(
-        string path,
-        Action<HttpResponseMessage>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Delete, path);
-        ApplyHeaders(request, headers);
-
-        var response = await Client.SendAsync(request);
-
-        if (validate != null)
-            validate(response);
-        else
-            response.EnsureSuccessStatusCode();
-
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Delete, path);
+            ApplyHeaders(request, headers);
+            var response = await Client.SendAsync(request);
+            if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
+            Emit("DELETE", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("DELETE", path, ex)) { }
         return this;
     }
 
     // --- PATCH ---
 
-    /// <summary>
-    /// PATCH and deserialize the response body as <typeparamref name="TResponse"/>.
-    /// </summary>
     public async Task<HttpClientSystem> PatchAsync<TResponse>(
-        string path,
-        object? body = null,
-        Action<TResponse>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Patch, path);
-        ApplyHeaders(request, headers);
-        if (body != null)
-            request.Content = JsonContent.Create(body);
-
-        var response = await Client.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
-                           ?? throw new InvalidOperationException(
-                               $"Failed to deserialize response body to {typeof(TResponse).Name}");
-        validate?.Invoke(responseBody);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Patch, path);
+            ApplyHeaders(request, headers);
+            if (body != null) request.Content = JsonContent.Create(body);
+            var response = await Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
+                               ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            validate?.Invoke(responseBody);
+            Emit("PATCH", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("PATCH", path, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// PATCH with access to the raw <see cref="HttpResponseMessage"/>.
-    /// </summary>
     public async Task<HttpClientSystem> PatchAsync(
-        string path,
-        object? body = null,
-        Action<HttpResponseMessage>? validate = null,
-        Dictionary<string, string>? headers = null)
+        string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Patch, path);
-        ApplyHeaders(request, headers);
-        if (body != null)
-            request.Content = JsonContent.Create(body);
-
-        var response = await Client.SendAsync(request);
-
-        if (validate != null)
-            validate(response);
-        else
-            response.EnsureSuccessStatusCode();
-
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Patch, path);
+            ApplyHeaders(request, headers);
+            if (body != null) request.Content = JsonContent.Create(body);
+            var response = await Client.SendAsync(request);
+            if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
+            Emit("PATCH", path, $"{(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex) when (EmitFailure("PATCH", path, ex)) { }
         return this;
     }
 
@@ -273,6 +211,23 @@ public class HttpClientSystem : IPluggedSystem
         if (headers == null) return;
         foreach (var (key, value) in headers)
             request.Headers.TryAddWithoutValidation(key, value);
+    }
+
+    private void Emit(string action, string? input, string? output)
+        => _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Success, Input = input, Output = output
+        });
+
+    private bool EmitFailure(string action, string? input, Exception ex)
+    {
+        _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Failed, Input = input, Error = ex.Message
+        });
+        return false;
     }
 
     public ValueTask DisposeAsync()

@@ -10,18 +10,20 @@ namespace Stove.Net.Redis;
 /// Redis system using Testcontainers. Manages a Redis container
 /// and provides get/set/assertion methods for e2e testing.
 /// </summary>
-public class RedisSystem(RedisSystemOptions options) : IPluggedSystem, IExposesConfiguration
+public class RedisSystem(RedisSystemOptions options)
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
 {
+    private const string SystemName = "Redis";
     private RedisContainer? _container;
     private string? _connectionString;
     private ConnectionMultiplexer? _multiplexer;
+    private IStoveEventEmitter? _emitter;
 
-    /// <summary>
-    /// The container's connection string, available after RunAsync().
-    /// </summary>
+    public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
+
+    /// <summary>The container's connection string, available after RunAsync().</summary>
     public string ConnectionString => _connectionString
-                                      ?? throw new InvalidOperationException(
-                                          "Redis container is not started yet.");
+                                      ?? throw new InvalidOperationException("Redis container is not started yet.");
 
     public async Task RunAsync()
     {
@@ -43,12 +45,7 @@ public class RedisSystem(RedisSystemOptions options) : IPluggedSystem, IExposesC
             return options.ConfigureExposedConfiguration(_connectionString);
 
         if (_connectionString != null)
-        {
-            return
-            [
-                new KeyValuePair<string, string>("Redis:ConnectionString", _connectionString)
-            ];
-        }
+            return [new KeyValuePair<string, string>("Redis:ConnectionString", _connectionString)];
 
         return [];
     }
@@ -59,122 +56,127 @@ public class RedisSystem(RedisSystemOptions options) : IPluggedSystem, IExposesC
 
     // --- Set ---
 
-    /// <summary>
-    /// Set a string value in Redis.
-    /// </summary>
     public async Task<RedisSystem> SetAsync(string key, string value, TimeSpan? expiry = null)
     {
-        var db = GetDatabase();
-        await db.StringSetAsync(key, value);
-        if (expiry.HasValue)
-            await db.KeyExpireAsync(key, expiry.Value);
+        try
+        {
+            var db = GetDatabase();
+            await db.StringSetAsync(key, value);
+            if (expiry.HasValue) await db.KeyExpireAsync(key, expiry.Value);
+            Emit("Set", key, "ok");
+        }
+        catch (Exception ex) when (EmitFailure("Set", key, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Set a JSON-serialized value in Redis.
-    /// </summary>
     public async Task<RedisSystem> SetAsync<T>(string key, T value, TimeSpan? expiry = null)
     {
-        var json = JsonSerializer.Serialize(value);
-        var db = GetDatabase();
-        await db.StringSetAsync(key, json);
-        if (expiry.HasValue)
-            await db.KeyExpireAsync(key, expiry.Value);
+        try
+        {
+            var json = JsonSerializer.Serialize(value);
+            var db = GetDatabase();
+            await db.StringSetAsync(key, json);
+            if (expiry.HasValue) await db.KeyExpireAsync(key, expiry.Value);
+            Emit("Set", key, "ok");
+        }
+        catch (Exception ex) when (EmitFailure("Set", key, ex)) { }
         return this;
     }
 
     // --- Get ---
 
-    /// <summary>
-    /// Get a string value from Redis and validate it.
-    /// </summary>
     public async Task<RedisSystem> GetAsync(string key, Action<string?> validate)
     {
-        var value = await GetDatabase().StringGetAsync(key);
-        validate(value.HasValue ? value.ToString() : null);
+        try
+        {
+            var value = await GetDatabase().StringGetAsync(key);
+            var str = value.HasValue ? value.ToString() : null;
+            validate(str);
+            Emit("Get", key, str ?? "(null)");
+        }
+        catch (Exception ex) when (EmitFailure("Get", key, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Get a JSON-deserialized value from Redis and validate it.
-    /// </summary>
     public async Task<RedisSystem> GetAsync<T>(string key, Action<T?> validate)
     {
-        var value = await GetDatabase().StringGetAsync(key);
-        if (!value.HasValue)
+        try
         {
-            validate(default);
-            return this;
+            var value = await GetDatabase().StringGetAsync(key);
+            T? deserialized = default;
+            if (value.HasValue) deserialized = JsonSerializer.Deserialize<T>(value.ToString());
+            validate(deserialized);
+            Emit("Get", key, value.HasValue ? value.ToString() : "(null)");
         }
-
-        var deserialized = JsonSerializer.Deserialize<T>(value.ToString());
-        validate(deserialized);
+        catch (Exception ex) when (EmitFailure("Get", key, ex)) { }
         return this;
     }
 
     // --- Assertions ---
 
-    /// <summary>
-    /// Assert that a key exists in Redis.
-    /// </summary>
     public async Task<RedisSystem> ShouldExist(string key)
     {
-        var exists = await GetDatabase().KeyExistsAsync(key);
-        if (!exists)
-            throw new InvalidOperationException($"Expected key '{key}' to exist in Redis, but it was not found.");
+        try
+        {
+            var exists = await GetDatabase().KeyExistsAsync(key);
+            if (!exists) throw new InvalidOperationException($"Expected key '{key}' to exist in Redis, but it was not found.");
+            Emit("ShouldExist", key, "exists");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldExist", key, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Assert that a key does not exist in Redis.
-    /// </summary>
     public async Task<RedisSystem> ShouldNotExist(string key)
     {
-        var exists = await GetDatabase().KeyExistsAsync(key);
-        if (exists)
-            throw new InvalidOperationException($"Expected key '{key}' to not exist in Redis, but it was found.");
+        try
+        {
+            var exists = await GetDatabase().KeyExistsAsync(key);
+            if (exists) throw new InvalidOperationException($"Expected key '{key}' to not exist in Redis, but it was found.");
+            Emit("ShouldNotExist", key, "not found");
+        }
+        catch (Exception ex) when (EmitFailure("ShouldNotExist", key, ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Delete a key from Redis.
-    /// </summary>
     public async Task<RedisSystem> DeleteAsync(string key)
     {
-        await GetDatabase().KeyDeleteAsync(key);
+        try
+        {
+            await GetDatabase().KeyDeleteAsync(key);
+            Emit("Delete", key, "ok");
+        }
+        catch (Exception ex) when (EmitFailure("Delete", key, ex)) { }
         return this;
     }
 
     // --- Hash ---
 
-    /// <summary>
-    /// Set a hash field in Redis.
-    /// </summary>
     public async Task<RedisSystem> HashSetAsync(string key, string field, string value)
     {
-        await GetDatabase().HashSetAsync(key, field, value);
+        try
+        {
+            await GetDatabase().HashSetAsync(key, field, value);
+            Emit("HashSet", $"{key}:{field}", "ok");
+        }
+        catch (Exception ex) when (EmitFailure("HashSet", $"{key}:{field}", ex)) { }
         return this;
     }
 
-    /// <summary>
-    /// Get all hash entries for a key and validate them.
-    /// </summary>
     public async Task<RedisSystem> HashGetAllAsync(string key, Action<Dictionary<string, string>> validate)
     {
-        var entries = await GetDatabase().HashGetAllAsync(key);
-        var dict = entries.ToDictionary(e => e.Name.ToString(), e => e.Value.ToString());
-        validate(dict);
+        try
+        {
+            var entries = await GetDatabase().HashGetAllAsync(key);
+            var dict = entries.ToDictionary(e => e.Name.ToString(), e => e.Value.ToString());
+            validate(dict);
+            Emit("HashGetAll", key, $"{dict.Count} field(s)");
+        }
+        catch (Exception ex) when (EmitFailure("HashGetAll", key, ex)) { }
         return this;
     }
 
     // --- Fault Injection ---
 
-    /// <summary>
-    /// Set the maximum memory Redis is allowed to use.
-    /// Once the limit is hit, Redis will reject writes depending on the eviction policy.
-    /// Useful for testing OOM error handling in the application.
-    /// </summary>
     public async Task<RedisSystem> SetMaxMemory(string maxMemory)
     {
         var server = GetServer();
@@ -182,10 +184,6 @@ public class RedisSystem(RedisSystemOptions options) : IPluggedSystem, IExposesC
         return this;
     }
 
-    /// <summary>
-    /// Set the maxmemory eviction policy.
-    /// Common values: "noeviction" (return errors), "allkeys-lru", "volatile-lru".
-    /// </summary>
     public async Task<RedisSystem> SetMaxMemoryPolicy(string policy)
     {
         var server = GetServer();
@@ -193,11 +191,6 @@ public class RedisSystem(RedisSystemOptions options) : IPluggedSystem, IExposesC
         return this;
     }
 
-    /// <summary>
-    /// Set the client idle timeout in seconds.
-    /// Connections idle for longer than this will be closed by Redis.
-    /// Set to 0 to disable (default).
-    /// </summary>
     public async Task<RedisSystem> SetIdleTimeout(int seconds)
     {
         var server = GetServer();
@@ -205,34 +198,42 @@ public class RedisSystem(RedisSystemOptions options) : IPluggedSystem, IExposesC
         return this;
     }
 
-    /// <summary>
-    /// Simulate a slow Redis command by executing DEBUG SLEEP.
-    /// Blocks the server for the specified duration.
-    /// Useful for testing command timeout handling.
-    /// </summary>
     public async Task<RedisSystem> SimulateSlowCommand(TimeSpan duration)
     {
         var server = GetServer();
-        await server.ExecuteAsync("DEBUG", ["SLEEP", duration.TotalSeconds.ToString("F1")]);
+        await server.ExecuteAsync("DEBUG", "SLEEP", duration.TotalSeconds.ToString("F1"));
         return this;
     }
 
     private IServer GetServer()
     {
-        // Create an admin-enabled connection for CONFIG and DEBUG commands
         var config = ConfigurationOptions.Parse(ConnectionString);
         config.AllowAdmin = true;
         var adminMultiplexer = ConnectionMultiplexer.Connect(config);
-        var endpoint = adminMultiplexer.GetEndPoints().First();
+        var endpoint = adminMultiplexer.GetEndPoints()[0];
         return adminMultiplexer.GetServer(endpoint);
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_multiplexer != null)
-            await _multiplexer.DisposeAsync();
+        if (_multiplexer != null) await _multiplexer.DisposeAsync();
+        if (_container != null) await _container.DisposeAsync();
+    }
 
-        if (_container != null)
-            await _container.DisposeAsync();
+    private void Emit(string action, string? input, string? output)
+        => _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Success, Input = input, Output = output
+        });
+
+    private bool EmitFailure(string action, string? input, Exception ex)
+    {
+        _emitter?.Emit(new StoveEntry
+        {
+            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            Result = EntryResult.Failed, Input = input, Error = ex.Message
+        });
+        return false;
     }
 }
