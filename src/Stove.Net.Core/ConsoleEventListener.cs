@@ -37,7 +37,17 @@ public sealed class ConsoleEventListener : IStoveEventListener
         {
             var icon = span.Status == "ok" ? Pass : Fail;
             Console.WriteLine($"{Prefix}   {icon} {span.OperationName} ({span.DurationMs}ms)");
+            return;
         }
+
+        // Server-side captured spans (from ITraceCollector) — show key details
+        if (span.ServiceName is "Validate" or "Http" or "PostgreSql" or "Redis"
+            or "Kafka" or "WireMock" or "MongoDb")
+            return; // Already shown as StoveEntry — skip duplicate
+
+        var detail = BuildSpanDetail(span);
+        if (!string.IsNullOrEmpty(detail))
+            Console.WriteLine($"{Prefix}   🔍 {span.ServiceName,-25} {detail}  ({span.DurationMs}ms)");
     }
 
     public void OnTestEnded(string testId, TimeSpan duration, string? error)
@@ -71,4 +81,31 @@ public sealed class ConsoleEventListener : IStoveEventListener
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength] + "…";
+
+    private static string BuildSpanDetail(StoveSpan span)
+    {
+        var attrs = span.Attributes;
+
+        // HTTP spans (ASP.NET Core incoming or HttpClient outgoing)
+        if (attrs.TryGetValue("http.request.method", out var method) ||
+            attrs.TryGetValue("http.method", out method))
+        {
+            var route = attrs.GetValueOrDefault("http.route")
+                        ?? attrs.GetValueOrDefault("url.full")
+                        ?? attrs.GetValueOrDefault("http.url")
+                        ?? span.OperationName;
+            var status = attrs.GetValueOrDefault("http.response.status_code")
+                         ?? attrs.GetValueOrDefault("http.status_code") ?? "";
+            return $"{method} {Truncate(route, 60)} [{status}]";
+        }
+
+        // Database spans
+        if (attrs.TryGetValue("db.statement", out var sql))
+            return Truncate(sql, 100);
+
+        if (attrs.TryGetValue("db.system", out var dbSystem))
+            return $"{dbSystem}: {span.OperationName}";
+
+        return span.OperationName;
+    }
 }

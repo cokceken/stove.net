@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Stove.Net.Core.Exceptions;
 
@@ -14,7 +15,26 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 {
     private readonly Dictionary<SystemKey, IPluggedSystem> _systems = new();
     private readonly List<IStoveEventListener> _listeners = [];
+    private readonly List<ITraceCollector> _traceCollectors = [];
     private readonly string _runId = Guid.NewGuid().ToString("N");
+
+    private static readonly ActivitySource StoveActivitySource = new("Stove.Net");
+
+    // Ensure the Stove ActivitySource always creates activities (for trace propagation)
+    // even when no InProcessTraceCollector is configured.
+    private static readonly ActivityListener StoveInternalListener = CreateStoveListener();
+
+    private static ActivityListener CreateStoveListener()
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "Stove.Net",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
 
     private string _currentTestId = string.Empty;
     private string _currentTraceId = string.Empty;
@@ -56,6 +76,11 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     /// Register an event listener. Listeners receive all lifecycle and operation events.
     /// </summary>
     public void AddListener(IStoveEventListener listener) => _listeners.Add(listener);
+
+    /// <summary>
+    /// Register a trace collector. Collectors capture server-side spans and emit them as StoveSpan.
+    /// </summary>
+    public void AddTraceCollector(ITraceCollector collector) => _traceCollectors.Add(collector);
 
     // ---- Test lifecycle ----
 
@@ -147,6 +172,10 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     {
         _runStartedAt = DateTimeOffset.UtcNow;
 
+        // Start trace collectors before systems so we capture system startup activity too
+        foreach (var collector in _traceCollectors)
+            collector.Start(this);
+
         foreach (var system in _systems.Values)
             await system.RunAsync();
 
@@ -174,8 +203,9 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
     /// <summary>
     /// Entry point for test validation. Creates a trace (root span) that wraps all
-    /// system assertions inside the callback. The caller method name is captured
-    /// automatically via [CallerMemberName] and used as the root span operation name.
+    /// system assertions inside the callback. Also creates a real System.Diagnostics.Activity
+    /// so that Activity.Current propagates the trace context (traceparent) to both
+    /// in-process and Docker-hosted SUTs — enabling automatic correlation of server spans.
     /// </summary>
     public async Task Validate(
         Func<ValidationDsl, Task> validation,
@@ -187,8 +217,18 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         var prevSpanId = _currentSpanId;
         _currentTraceId = traceId;
         _currentSpanId = rootSpanId;
-        var start = DateTimeOffset.UtcNow;
 
+        // Create a real Activity so Activity.Current carries the trace context.
+        // This propagates traceparent to HttpClient → ASP.NET Core → all downstream spans.
+        var activityTraceId = ActivityTraceId.CreateFromString(traceId.AsSpan());
+        var activitySpanId = ActivitySpanId.CreateFromString(rootSpanId.AsSpan());
+        var parentContext = new ActivityContext(activityTraceId, activitySpanId,
+            ActivityTraceFlags.Recorded, isRemote: false);
+
+        using var activity = StoveActivitySource.StartActivity(
+            callerName, ActivityKind.Internal, parentContext);
+
+        var start = DateTimeOffset.UtcNow;
         var dsl = new ValidationDsl(this);
         try
         {
@@ -202,6 +242,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         }
         catch (Exception ex)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             EmitSpan(new StoveSpan
             {
                 TraceId = traceId, SpanId = rootSpanId, ParentSpanId = string.Empty,
@@ -221,6 +262,10 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
     public async ValueTask DisposeAsync()
     {
+        // Stop trace collectors before tearing down systems
+        foreach (var collector in _traceCollectors)
+            await collector.DisposeAsync();
+
         var duration = DateTimeOffset.UtcNow - _runStartedAt;
         foreach (var listener in _listeners)
             listener.OnRunEnded(_totalTests, _passedTests, _failedTests, duration);

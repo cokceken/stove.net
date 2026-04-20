@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Stove.Net.Core;
 using Xunit;
 
@@ -206,5 +207,47 @@ public class EventModelTests
         Assert.NotNull(span.Exception);
         Assert.Equal("InvalidOperationException", span.Exception.Type);
         Assert.Equal("boom", span.Exception.Message);
+    }
+
+    [Fact]
+    public async Task InProcessTraceCollector_captures_activity_spans()
+    {
+        var listener = new CaptureListener();
+
+        var stove = await StoveBuilder.Create()
+            .WithListener(listener)
+            .WithTraceCapture(name => name == "TestApp.Source")
+            .RunAsync();
+
+        stove.NotifyTestStarted("t7", "Activity_capture", "TraceSpec");
+
+        // Simulate a server-side ActivitySource (like ASP.NET Core would emit)
+        using var source = new ActivitySource("TestApp.Source");
+        await stove.Validate(async _ =>
+        {
+            using var activity = source.StartActivity("GET /api/products", ActivityKind.Server);
+            activity?.SetTag("http.method", "GET");
+            activity?.SetTag("http.route", "/api/products");
+            activity?.SetTag("http.status_code", "200");
+            await Task.CompletedTask;
+        });
+
+        stove.NotifyTestEnded(true);
+        await stove.DisposeAsync();
+
+        // Should have: root Validate span + captured server activity
+        var serverSpans = listener.SpansRecorded
+            .Where(s => s.ServiceName == "TestApp.Source").ToList();
+        Assert.Single(serverSpans);
+
+        var serverSpan = serverSpans[0];
+        Assert.Equal("GET /api/products", serverSpan.OperationName);
+        Assert.Equal("GET", serverSpan.Attributes["http.method"]);
+        Assert.Equal("/api/products", serverSpan.Attributes["http.route"]);
+        Assert.Equal("200", serverSpan.Attributes["http.status_code"]);
+
+        // Server span should share the same trace ID as the Validate root span
+        var rootSpan = listener.SpansRecorded.First(s => s.ServiceName == "Validate");
+        Assert.Equal(rootSpan.TraceId, serverSpan.TraceId);
     }
 }
