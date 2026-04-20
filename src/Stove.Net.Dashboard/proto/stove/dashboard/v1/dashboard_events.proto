@@ -1,8 +1,7 @@
 syntax = "proto3";
 package stove.dashboard.v1;
 
-option java_package = "com.trendyol.stove.dashboard.api";
-option java_multiple_files = true;
+option csharp_namespace = "Stove.Dashboard.V1";
 
 import "google/protobuf/timestamp.proto";
 

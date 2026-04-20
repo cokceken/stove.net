@@ -7,6 +7,7 @@ using Stove.Net.Redis;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Integration.Setup;
 using Stove.Net.WireMock;
+using Stove.Net.Xunit;
 using Xunit;
 
 namespace Stove.Net.Tests.Integration.Tests;
@@ -15,19 +16,23 @@ namespace Stove.Net.Tests.Integration.Tests;
 /// Integration tests combining HTTP + PostgreSQL + Kafka + Redis systems.
 /// Validates end-to-end flows through a real API, database, message broker, and cache.
 /// </summary>
-public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationFixture>, IAsyncLifetime
+public class OrderTests(IntegrationFixture fixture)
+    : StoveTestBase<IntegrationFixture>(fixture), IClassFixture<IntegrationFixture>, IAsyncLifetime
 {
-    public async ValueTask InitializeAsync()
+    private readonly IntegrationFixture _fixture = fixture;
+
+    public override async ValueTask InitializeAsync()
     {
-        await fixture.Stove.CleanupAsync();
+        await base.InitializeAsync();
+        await _fixture.Stove.CleanupAsync();
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public override async ValueTask DisposeAsync() => await base.DisposeAsync();
 
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {
-        await fixture.Stove.Validate(async s =>
+        await _fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -90,15 +95,12 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
     [Fact]
     public async Task Should_return_404_for_nonexistent_order()
     {
-        await fixture.Stove.Validate(async s =>
+        await _fixture.Stove.Validate(async s =>
         {
             await s.Http(async http =>
             {
                 await http.GetAsync("/api/orders/99999",
-                    validate: response =>
-                    {
-                        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-                    });
+                    validate: response => { Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); });
             });
         });
     }
@@ -106,7 +108,7 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
     [Fact]
     public async Task Should_get_order_by_id()
     {
-        await fixture.Stove.Validate(async s =>
+        await _fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -139,7 +141,7 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
     [Fact]
     public async Task Should_remove_cached_order_on_delete()
     {
-        await fixture.Stove.Validate(async s =>
+        await _fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -153,26 +155,17 @@ public class OrderTests(IntegrationFixture fixture) : IClassFixture<IntegrationF
             Assert.NotNull(createdOrder);
 
             // Verify cached
-            await s.Redis(async redis =>
-            {
-                await redis.ShouldExist($"order:{createdOrder!.Id}");
-            });
+            await s.Redis(async redis => { await redis.ShouldExist($"order:{createdOrder!.Id}"); });
 
             // Delete the order
             await s.Http(async http =>
             {
                 await http.DeleteAsync($"/api/orders/{createdOrder!.Id}",
-                    validate: response =>
-                    {
-                        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-                    });
+                    validate: response => { Assert.Equal(HttpStatusCode.NoContent, response.StatusCode); });
             });
 
             // Verify cache evicted
-            await s.Redis(async redis =>
-            {
-                await redis.ShouldNotExist($"order:{createdOrder!.Id}");
-            });
+            await s.Redis(async redis => { await redis.ShouldNotExist($"order:{createdOrder!.Id}"); });
         });
     }
 }

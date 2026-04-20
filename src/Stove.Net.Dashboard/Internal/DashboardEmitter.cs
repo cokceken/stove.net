@@ -1,12 +1,11 @@
 using System.Threading.Channels;
-using Grpc.Core;
 using Grpc.Net.Client;
 using Stove.Dashboard.V1;
 
 namespace Stove.Net.Dashboard.Internal;
 
 /// <summary>
-/// Sends DashboardEvents to the Stove UI via gRPC client-streaming (StreamEvents RPC).
+/// Sends DashboardEvents to the Stove UI via gRPC unary calls (SendEvent RPC).
 /// Events are queued on an unbounded channel and drained by a background Task.
 /// Auto-disables after MaxConsecutiveFailures consecutive send errors to prevent test noise.
 /// </summary>
@@ -24,7 +23,7 @@ internal sealed class DashboardEmitter : IAsyncDisposable
     internal DashboardEmitter(DashboardSystemOptions options)
     {
         _options = options;
-        _channel = System.Threading.Channels.Channel.CreateUnbounded<DashboardEvent>(
+        _channel = Channel.CreateUnbounded<DashboardEvent>(
             new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
 
         _drainTask = Task.Run(DrainLoop);
@@ -50,8 +49,14 @@ internal sealed class DashboardEmitter : IAsyncDisposable
         {
             await _drainTask.WaitAsync(drainCts.Token);
         }
-        catch (OperationCanceledException) { /* timeout — abandon remaining events */ }
-        catch (Exception) { /* ignore drain errors on shutdown */ }
+        catch (OperationCanceledException)
+        {
+            /* timeout — abandon remaining events */
+        }
+        catch (Exception)
+        {
+            /* ignore drain errors on shutdown */
+        }
 
         await _cts.CancelAsync();
         _cts.Dispose();
@@ -100,14 +105,7 @@ internal sealed class DashboardEmitter : IAsyncDisposable
 
     private DashboardEventService.DashboardEventServiceClient GetClient()
     {
-        if (_grpcChannel == null)
-        {
-            _grpcChannel = GrpcChannel.ForAddress(_options.Address, new GrpcChannelOptions
-            {
-                Credentials = ChannelCredentials.Insecure
-            });
-        }
-
+        _grpcChannel ??= GrpcChannel.ForAddress(_options.Address);
         return new DashboardEventService.DashboardEventServiceClient(_grpcChannel);
     }
 }

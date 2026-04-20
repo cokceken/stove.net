@@ -13,29 +13,18 @@ namespace Stove.Net.Dashboard;
 /// If the dashboard is unreachable the emitter self-disables after MaxConsecutiveFailures
 /// to avoid disrupting the test run.
 /// </summary>
-public sealed class DashboardSystem : IPluggedSystem, IStoveEventListener
+public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSystem, IStoveEventListener
 {
-    private readonly DashboardSystemOptions _options;
-    private DashboardEmitter? _emitter;
+    private readonly DashboardEmitter _emitter = new(options);
     private string _runId = string.Empty;
 
-    public DashboardSystem(DashboardSystemOptions options)
-    {
-        _options = options;
-    }
-
-    public Task RunAsync()
-    {
-        _emitter = new DashboardEmitter(_options);
-        return Task.CompletedTask;
-    }
+    public Task RunAsync() => Task.CompletedTask;
 
     public Task CleanupAsync() => Task.CompletedTask;
 
     public async ValueTask DisposeAsync()
     {
-        if (_emitter != null)
-            await _emitter.DisposeAsync();
+        await _emitter.DisposeAsync();
     }
 
     // ---- IStoveEventListener ----
@@ -43,7 +32,7 @@ public sealed class DashboardSystem : IPluggedSystem, IStoveEventListener
     public void OnRunStarted(string runId, string appName, IReadOnlyList<string> systems)
     {
         _runId = runId;
-        var appNameResolved = string.IsNullOrEmpty(appName) ? _options.AppName : appName;
+        var appNameResolved = string.IsNullOrEmpty(appName) ? options.AppName : appName;
 
         Enqueue(new DashboardEvent
         {
@@ -126,7 +115,7 @@ public sealed class DashboardSystem : IPluggedSystem, IStoveEventListener
         });
     }
 
-    private void Enqueue(DashboardEvent evt) => _emitter?.Enqueue(evt);
+    private void Enqueue(DashboardEvent evt) => _emitter.Enqueue(evt);
 
     private static string GetStoveVersion()
     {

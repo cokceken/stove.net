@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stove.Net.Core;
+using Stove.Net.Dashboard;
 using Stove.Net.Http;
 using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
@@ -21,39 +22,41 @@ public class IntegrationFixture : StoveFixture<Program>
     protected override StoveBuilder Configure(StoveBuilder builder)
     {
         return builder
+            .WithConsoleReporter()
+            .WithDashboard()
             .WithHttpClient()
             .WithPostgreSql(opts =>
             {
-                opts.ConfigureExposedConfiguration = connectionString => new[]
-                {
+                opts.ConfigureExposedConfiguration = connectionString =>
+                [
                     new KeyValuePair<string, string>(
                         "ConnectionStrings:DefaultConnection", connectionString)
-                };
+                ];
             })
             .WithKafka(opts =>
             {
                 opts.TopicsToConsume.Add("order-events");
-                opts.ConfigureExposedConfiguration = bootstrapServers => new[]
-                {
+                opts.ConfigureExposedConfiguration = bootstrapServers =>
+                [
                     new KeyValuePair<string, string>(
                         "Kafka:BootstrapServers", bootstrapServers)
-                };
+                ];
             })
             .WithRedis(opts =>
             {
-                opts.ConfigureExposedConfiguration = connectionString => new[]
-                {
+                opts.ConfigureExposedConfiguration = connectionString =>
+                [
                     new KeyValuePair<string, string>(
                         "Redis:ConnectionString", connectionString)
-                };
+                ];
             })
             .WithWireMock(opts =>
             {
-                opts.ConfigureExposedConfiguration = url => new[]
-                {
+                opts.ConfigureExposedConfiguration = url =>
+                [
                     new KeyValuePair<string, string>(
                         "ExternalApis:NotificationUrl", url)
-                };
+                ];
             });
     }
 

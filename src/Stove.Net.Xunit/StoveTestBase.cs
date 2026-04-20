@@ -22,7 +22,7 @@ namespace Stove.Net.Xunit;
 /// }
 /// </code>
 /// </summary>
-public abstract class StoveTestBase<TFixture> : IAsyncLifetime
+public abstract class StoveTestBase<TFixture>(TFixture fixture) : IAsyncLifetime
     where TFixture : IStoveFixture
 {
     private readonly string _testId = Guid.NewGuid().ToString("N");
@@ -30,15 +30,10 @@ public abstract class StoveTestBase<TFixture> : IAsyncLifetime
     private string? _testError;
 
     /// <summary>The fixture that owns the Stove instance.</summary>
-    protected TFixture Fixture { get; }
+    protected TFixture Fixture { get; } = fixture;
 
     /// <summary>The Stove instance from the fixture.</summary>
     protected StoveInstance Stove => Fixture.Stove;
-
-    protected StoveTestBase(TFixture fixture)
-    {
-        Fixture = fixture;
-    }
 
     /// <summary>
     /// Wraps Stove.Validate with failure tracking so OnTestEnded reports the correct status.

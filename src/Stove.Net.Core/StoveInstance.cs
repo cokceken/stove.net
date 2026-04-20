@@ -12,7 +12,7 @@ namespace Stove.Net.Core;
 public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 {
     private readonly Dictionary<SystemKey, IPluggedSystem> _systems = new();
-    private readonly List<IStoveEventListener> _listeners = new();
+    private readonly List<IStoveEventListener> _listeners = [];
     private readonly string _runId = Guid.NewGuid().ToString("N");
 
     private string _currentTestId = string.Empty;
@@ -61,7 +61,8 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     public void NotifyTestEnded(bool passed, string? error = null)
     {
         var duration = DateTimeOffset.UtcNow - _testStartedAt;
-        if (passed) _passedTests++; else _failedTests++;
+        if (passed) _passedTests++;
+        else _failedTests++;
         foreach (var listener in _listeners)
             listener.OnTestEnded(_currentTestId, duration, error);
         _currentTestId = string.Empty;
@@ -122,23 +123,23 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     /// <summary>
     /// Returns all configuration key-value pairs from systems that implement IExposesConfiguration.
     /// </summary>
-    public IEnumerable<KeyValuePair<string, string>> CollectConfiguration()
-    {
-        foreach (var system in _systems.Values.OfType<IExposesConfiguration>())
-            foreach (var kvp in system.Configuration())
-                yield return kvp;
-    }
+    public IEnumerable<KeyValuePair<string, string>> CollectConfiguration() => _systems.Values
+        .OfType<IExposesConfiguration>().SelectMany(system => system.Configuration());
 
     /// <summary>Start all registered systems (containers, clients, etc.).</summary>
     public async Task RunSystemsAsync()
     {
         _runStartedAt = DateTimeOffset.UtcNow;
-        var systemNames = _systems.Keys.Select(k => k.SystemType.Name).ToList();
-        foreach (var listener in _listeners)
-            listener.OnRunStarted(_runId, string.Empty, systemNames);
 
         foreach (var system in _systems.Values)
             await system.RunAsync();
+
+        // Fire OnRunStarted AFTER all systems have started — this ensures
+        // listener systems (e.g., DashboardSystem) have their infrastructure
+        // ready, and the reported system list reflects what actually started.
+        var systemNames = _systems.Keys.Select(k => k.SystemType.Name).ToList();
+        foreach (var listener in _listeners)
+            listener.OnRunStarted(_runId, string.Empty, systemNames);
     }
 
     /// <summary>Notify all IAfterRunAware systems that the application has started.</summary>
