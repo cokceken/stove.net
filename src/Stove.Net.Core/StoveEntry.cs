@@ -7,6 +7,7 @@ namespace Stove.Net.Core;
 public sealed record StoveEntry
 {
     public string TestId { get; init; } = string.Empty;
+    public string TraceId { get; init; } = string.Empty;
     public string System { get; init; } = string.Empty;
     public string Action { get; init; } = string.Empty;
     public EntryResult Result { get; init; }

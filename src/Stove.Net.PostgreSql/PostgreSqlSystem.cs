@@ -78,6 +78,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Action<List<T>> validate,
         object? parameters = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             await using var conn = new NpgsqlConnection(ConnectionString);
@@ -90,9 +91,9 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
             while (await reader.ReadAsync()) results.Add(mapper(reader));
 
             validate(results);
-            Emit("ShouldQuery", sql, $"{results.Count} row(s)");
+            Emit("ShouldQuery", sql, $"{results.Count} row(s)", start);
         }
-        catch (Exception ex) when (EmitFailure("ShouldQuery", sql, ex))
+        catch (Exception ex) when (EmitFailure("ShouldQuery", sql, ex, start))
         {
             // EmitFailure always returns false — exception re-thrown
         }
@@ -106,6 +107,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Action<int>? validateAffectedRows = null,
         object? parameters = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             await using var conn = new NpgsqlConnection(ConnectionString);
@@ -115,9 +117,9 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
 
             var affected = await cmd.ExecuteNonQueryAsync();
             validateAffectedRows?.Invoke(affected);
-            Emit("ShouldExecute", sql, $"{affected} row(s) affected");
+            Emit("ShouldExecute", sql, $"{affected} row(s) affected", start);
         }
-        catch (Exception ex) when (EmitFailure("ShouldExecute", sql, ex))
+        catch (Exception ex) when (EmitFailure("ShouldExecute", sql, ex, start))
         {
         }
 
@@ -130,6 +132,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Action<T?> validate,
         object? parameters = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             await using var conn = new NpgsqlConnection(ConnectionString);
@@ -140,9 +143,9 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
             var result = await cmd.ExecuteScalarAsync();
             var typed = result is T t ? t : default;
             validate(typed);
-            Emit("ShouldQueryScalar", sql, typed?.ToString());
+            Emit("ShouldQueryScalar", sql, typed?.ToString(), start);
         }
-        catch (Exception ex) when (EmitFailure("ShouldQueryScalar", sql, ex))
+        catch (Exception ex) when (EmitFailure("ShouldQueryScalar", sql, ex, start))
         {
         }
 
@@ -196,28 +199,46 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
 
     // --- Emit helpers ---
 
-    private void Emit(string action, string? input, string? output)
-        => _emitter?.Emit(new StoveEntry
-        {
-            TestId = _emitter.CurrentTestId,
-            System = SystemName,
-            Action = action,
-            Result = EntryResult.Success,
-            Input = input,
-            Output = output
-        });
-
-    private bool EmitFailure(string action, string? input, Exception ex)
+    private void Emit(string action, string? input, string? output, DateTimeOffset start)
     {
-        _emitter?.Emit(new StoveEntry
+        if (_emitter == null) return;
+        var traceId = _emitter.CurrentTraceId;
+        _emitter.Emit(new StoveEntry
         {
-            TestId = _emitter.CurrentTestId,
-            System = SystemName,
-            Action = action,
-            Result = EntryResult.Failed,
-            Input = input,
-            Error = ex.Message
+            TestId = _emitter.CurrentTestId, TraceId = traceId,
+            System = SystemName, Action = action,
+            Result = EntryResult.Success, Input = input, Output = output
         });
+        _emitter.EmitSpan(new StoveSpan
+        {
+            TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+            ParentSpanId = _emitter.CurrentSpanId,
+            OperationName = action, ServiceName = SystemName,
+            Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
+        });
+    }
+
+    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
+    {
+        if (_emitter != null)
+        {
+            var traceId = _emitter.CurrentTraceId;
+            _emitter.Emit(new StoveEntry
+            {
+                TestId = _emitter.CurrentTestId, TraceId = traceId,
+                System = SystemName, Action = action,
+                Result = EntryResult.Failed, Input = input, Error = ex.Message
+            });
+            _emitter.EmitSpan(new StoveSpan
+            {
+                TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+                ParentSpanId = _emitter.CurrentSpanId,
+                OperationName = action, ServiceName = SystemName,
+                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
+                    ex.StackTrace?.Split('\n') ?? [])
+            });
+        }
         return false;
     }
 }

@@ -150,4 +150,61 @@ public class EventModelTests
         Assert.Single(listener.TestsStarted);
         Assert.Single(listener.EntriesRecorded);
     }
+
+    [Fact]
+    public async Task Validate_emits_root_span_with_caller_name()
+    {
+        var listener = new CaptureListener();
+
+        var stove = new StoveInstance();
+        stove.AddListener(listener);
+        await stove.RunSystemsAsync();
+
+        stove.NotifyTestStarted("t5", "Span_test", "SpanSpec");
+
+        await stove.Validate(async _ => await Task.CompletedTask);
+
+        stove.NotifyTestEnded(true);
+        await stove.DisposeAsync();
+
+        // Validate() emits a root span
+        Assert.Single(listener.SpansRecorded);
+        var rootSpan = listener.SpansRecorded[0];
+        Assert.Equal("Validate_emits_root_span_with_caller_name", rootSpan.OperationName);
+        Assert.Equal("Validate", rootSpan.ServiceName);
+        Assert.Equal("ok", rootSpan.Status);
+        Assert.Empty(rootSpan.ParentSpanId);
+        Assert.NotEmpty(rootSpan.TraceId);
+        Assert.NotEmpty(rootSpan.SpanId);
+        Assert.True(rootSpan.DurationMs >= 0);
+    }
+
+    [Fact]
+    public async Task Failed_validate_emits_error_span()
+    {
+        var listener = new CaptureListener();
+
+        var stove = new StoveInstance();
+        stove.AddListener(listener);
+        await stove.RunSystemsAsync();
+
+        stove.NotifyTestStarted("t6", "FailSpan_test", "SpanSpec");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await stove.Validate(async _ =>
+            {
+                await Task.CompletedTask;
+                throw new InvalidOperationException("boom");
+            }));
+
+        stove.NotifyTestEnded(false, "boom");
+        await stove.DisposeAsync();
+
+        Assert.Single(listener.SpansRecorded);
+        var span = listener.SpansRecorded[0];
+        Assert.Equal("error", span.Status);
+        Assert.NotNull(span.Exception);
+        Assert.Equal("InvalidOperationException", span.Exception.Type);
+        Assert.Equal("boom", span.Exception.Message);
+    }
 }

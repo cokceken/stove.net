@@ -30,6 +30,16 @@ public sealed class ConsoleEventListener : IStoveEventListener
         Console.WriteLine($"{Prefix} {icon} {location,-40} {detail}");
     }
 
+    public void OnSpanRecorded(StoveSpan span)
+    {
+        // Root spans (Validate calls) are shown as scope markers
+        if (string.IsNullOrEmpty(span.ParentSpanId))
+        {
+            var icon = span.Status == "ok" ? Pass : Fail;
+            Console.WriteLine($"{Prefix}   {icon} {span.OperationName} ({span.DurationMs}ms)");
+        }
+    }
+
     public void OnTestEnded(string testId, TimeSpan duration, string? error)
     {
         if (error != null)

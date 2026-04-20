@@ -30,6 +30,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
     public async Task<HttpClientSystem> GetAsync<TResponse>(
         string path, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, path);
@@ -39,24 +40,25 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             var body = await response.Content.ReadFromJsonAsync<TResponse>()
                        ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(body);
-            Emit("GET", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("GET", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("GET", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("GET", path, ex, start)) { }
         return this;
     }
 
     public async Task<HttpClientSystem> GetAsync(
         string path, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, path);
             ApplyHeaders(request, headers);
             var response = await Client.SendAsync(request);
             if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
-            Emit("GET", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("GET", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("GET", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("GET", path, ex, start)) { }
         return this;
     }
 
@@ -65,6 +67,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
     public async Task<HttpClientSystem> PostAsync<TResponse>(
         string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, path);
@@ -75,15 +78,16 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
                                ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(responseBody);
-            Emit("POST", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("POST", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("POST", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("POST", path, ex, start)) { }
         return this;
     }
 
     public async Task<HttpClientSystem> PostAsync(
         string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, path);
@@ -91,9 +95,9 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             if (body != null) request.Content = JsonContent.Create(body);
             var response = await Client.SendAsync(request);
             if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
-            Emit("POST", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("POST", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("POST", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("POST", path, ex, start)) { }
         return this;
     }
 
@@ -102,6 +106,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
     public async Task<HttpClientSystem> PutAsync<TResponse>(
         string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Put, path);
@@ -112,15 +117,16 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
                                ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(responseBody);
-            Emit("PUT", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("PUT", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("PUT", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("PUT", path, ex, start)) { }
         return this;
     }
 
     public async Task<HttpClientSystem> PutAsync(
         string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Put, path);
@@ -128,9 +134,9 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             if (body != null) request.Content = JsonContent.Create(body);
             var response = await Client.SendAsync(request);
             if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
-            Emit("PUT", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("PUT", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("PUT", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("PUT", path, ex, start)) { }
         return this;
     }
 
@@ -139,6 +145,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
     public async Task<HttpClientSystem> DeleteAsync<TResponse>(
         string path, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Delete, path);
@@ -148,24 +155,25 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             var body = await response.Content.ReadFromJsonAsync<TResponse>()
                        ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(body);
-            Emit("DELETE", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("DELETE", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("DELETE", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("DELETE", path, ex, start)) { }
         return this;
     }
 
     public async Task<HttpClientSystem> DeleteAsync(
         string path, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Delete, path);
             ApplyHeaders(request, headers);
             var response = await Client.SendAsync(request);
             if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
-            Emit("DELETE", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("DELETE", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("DELETE", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("DELETE", path, ex, start)) { }
         return this;
     }
 
@@ -174,6 +182,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
     public async Task<HttpClientSystem> PatchAsync<TResponse>(
         string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Patch, path);
@@ -184,15 +193,16 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             var responseBody = await response.Content.ReadFromJsonAsync<TResponse>()
                                ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(responseBody);
-            Emit("PATCH", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("PATCH", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("PATCH", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("PATCH", path, ex, start)) { }
         return this;
     }
 
     public async Task<HttpClientSystem> PatchAsync(
         string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Patch, path);
@@ -200,9 +210,9 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             if (body != null) request.Content = JsonContent.Create(body);
             var response = await Client.SendAsync(request);
             if (validate != null) validate(response); else response.EnsureSuccessStatusCode();
-            Emit("PATCH", path, $"{(int)response.StatusCode} {response.StatusCode}");
+            Emit("PATCH", path, $"{(int)response.StatusCode} {response.StatusCode}", start);
         }
-        catch (Exception ex) when (EmitFailure("PATCH", path, ex)) { }
+        catch (Exception ex) when (EmitFailure("PATCH", path, ex, start)) { }
         return this;
     }
 
@@ -213,20 +223,46 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             request.Headers.TryAddWithoutValidation(key, value);
     }
 
-    private void Emit(string action, string? input, string? output)
-        => _emitter?.Emit(new StoveEntry
+    private void Emit(string action, string? input, string? output, DateTimeOffset start)
+    {
+        if (_emitter == null) return;
+        var traceId = _emitter.CurrentTraceId;
+        _emitter.Emit(new StoveEntry
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            TestId = _emitter.CurrentTestId, TraceId = traceId,
+            System = SystemName, Action = action,
             Result = EntryResult.Success, Input = input, Output = output
         });
-
-    private bool EmitFailure(string action, string? input, Exception ex)
-    {
-        _emitter?.Emit(new StoveEntry
+        _emitter.EmitSpan(new StoveSpan
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
-            Result = EntryResult.Failed, Input = input, Error = ex.Message
+            TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+            ParentSpanId = _emitter.CurrentSpanId,
+            OperationName = action, ServiceName = SystemName,
+            Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
         });
+    }
+
+    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
+    {
+        if (_emitter != null)
+        {
+            var traceId = _emitter.CurrentTraceId;
+            _emitter.Emit(new StoveEntry
+            {
+                TestId = _emitter.CurrentTestId, TraceId = traceId,
+                System = SystemName, Action = action,
+                Result = EntryResult.Failed, Input = input, Error = ex.Message
+            });
+            _emitter.EmitSpan(new StoveSpan
+            {
+                TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+                ParentSpanId = _emitter.CurrentSpanId,
+                OperationName = action, ServiceName = SystemName,
+                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
+                    ex.StackTrace?.Split('\n') ?? [])
+            });
+        }
         return false;
     }
 

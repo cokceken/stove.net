@@ -99,6 +99,31 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
         });
     }
 
+    public void OnSpanRecorded(StoveSpan span)
+    {
+        var evt = new SpanRecordedEvent
+        {
+            TraceId = span.TraceId,
+            SpanId = span.SpanId,
+            ParentSpanId = span.ParentSpanId,
+            OperationName = span.OperationName,
+            ServiceName = span.ServiceName,
+            StartTimeNanos = span.Start.ToUnixTimeMilliseconds() * 1_000_000,
+            EndTimeNanos = span.End.ToUnixTimeMilliseconds() * 1_000_000,
+            Status = span.Status
+        };
+        foreach (var (k, v) in span.Attributes)
+            evt.Attributes.Add(k, v);
+        if (span.Exception is { } ex)
+            evt.Exception = new ExceptionInfo
+            {
+                Type = ex.Type,
+                Message = ex.Message,
+                StackTrace = { ex.StackTrace }
+            };
+        Enqueue(new DashboardEvent { RunId = _runId, SpanRecorded = evt });
+    }
+
     public void OnRunEnded(int total, int passed, int failed, TimeSpan duration)
     {
         Enqueue(new DashboardEvent
@@ -119,6 +144,8 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
 
     private static string GetStoveVersion()
     {
+        //this is the current version of the stove dashboard so lets keep it
+        return "0.23.3";
         var asm = typeof(DashboardSystem).Assembly;
         return asm.GetName().Version?.ToString() ?? "0.0.0";
     }

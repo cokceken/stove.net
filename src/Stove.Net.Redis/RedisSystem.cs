@@ -58,28 +58,30 @@ public class RedisSystem(RedisSystemOptions options)
 
     public async Task<RedisSystem> SetAsync(string key, string value, TimeSpan? expiry = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var db = GetDatabase();
             await db.StringSetAsync(key, value);
             if (expiry.HasValue) await db.KeyExpireAsync(key, expiry.Value);
-            Emit("Set", key, "ok");
+            Emit("Set", key, "ok", start);
         }
-        catch (Exception ex) when (EmitFailure("Set", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("Set", key, ex, start)) { }
         return this;
     }
 
     public async Task<RedisSystem> SetAsync<T>(string key, T value, TimeSpan? expiry = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var json = JsonSerializer.Serialize(value);
             var db = GetDatabase();
             await db.StringSetAsync(key, json);
             if (expiry.HasValue) await db.KeyExpireAsync(key, expiry.Value);
-            Emit("Set", key, "ok");
+            Emit("Set", key, "ok", start);
         }
-        catch (Exception ex) when (EmitFailure("Set", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("Set", key, ex, start)) { }
         return this;
     }
 
@@ -87,28 +89,30 @@ public class RedisSystem(RedisSystemOptions options)
 
     public async Task<RedisSystem> GetAsync(string key, Action<string?> validate)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var value = await GetDatabase().StringGetAsync(key);
             var str = value.HasValue ? value.ToString() : null;
             validate(str);
-            Emit("Get", key, str ?? "(null)");
+            Emit("Get", key, str ?? "(null)", start);
         }
-        catch (Exception ex) when (EmitFailure("Get", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("Get", key, ex, start)) { }
         return this;
     }
 
     public async Task<RedisSystem> GetAsync<T>(string key, Action<T?> validate)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var value = await GetDatabase().StringGetAsync(key);
             T? deserialized = default;
             if (value.HasValue) deserialized = JsonSerializer.Deserialize<T>(value.ToString());
             validate(deserialized);
-            Emit("Get", key, value.HasValue ? value.ToString() : "(null)");
+            Emit("Get", key, value.HasValue ? value.ToString() : "(null)", start);
         }
-        catch (Exception ex) when (EmitFailure("Get", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("Get", key, ex, start)) { }
         return this;
     }
 
@@ -116,36 +120,39 @@ public class RedisSystem(RedisSystemOptions options)
 
     public async Task<RedisSystem> ShouldExist(string key)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var exists = await GetDatabase().KeyExistsAsync(key);
             if (!exists) throw new InvalidOperationException($"Expected key '{key}' to exist in Redis, but it was not found.");
-            Emit("ShouldExist", key, "exists");
+            Emit("ShouldExist", key, "exists", start);
         }
-        catch (Exception ex) when (EmitFailure("ShouldExist", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("ShouldExist", key, ex, start)) { }
         return this;
     }
 
     public async Task<RedisSystem> ShouldNotExist(string key)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var exists = await GetDatabase().KeyExistsAsync(key);
             if (exists) throw new InvalidOperationException($"Expected key '{key}' to not exist in Redis, but it was found.");
-            Emit("ShouldNotExist", key, "not found");
+            Emit("ShouldNotExist", key, "not found", start);
         }
-        catch (Exception ex) when (EmitFailure("ShouldNotExist", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("ShouldNotExist", key, ex, start)) { }
         return this;
     }
 
     public async Task<RedisSystem> DeleteAsync(string key)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             await GetDatabase().KeyDeleteAsync(key);
-            Emit("Delete", key, "ok");
+            Emit("Delete", key, "ok", start);
         }
-        catch (Exception ex) when (EmitFailure("Delete", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("Delete", key, ex, start)) { }
         return this;
     }
 
@@ -153,25 +160,27 @@ public class RedisSystem(RedisSystemOptions options)
 
     public async Task<RedisSystem> HashSetAsync(string key, string field, string value)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             await GetDatabase().HashSetAsync(key, field, value);
-            Emit("HashSet", $"{key}:{field}", "ok");
+            Emit("HashSet", $"{key}:{field}", "ok", start);
         }
-        catch (Exception ex) when (EmitFailure("HashSet", $"{key}:{field}", ex)) { }
+        catch (Exception ex) when (EmitFailure("HashSet", $"{key}:{field}", ex, start)) { }
         return this;
     }
 
     public async Task<RedisSystem> HashGetAllAsync(string key, Action<Dictionary<string, string>> validate)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var entries = await GetDatabase().HashGetAllAsync(key);
             var dict = entries.ToDictionary(e => e.Name.ToString(), e => e.Value.ToString());
             validate(dict);
-            Emit("HashGetAll", key, $"{dict.Count} field(s)");
+            Emit("HashGetAll", key, $"{dict.Count} field(s)", start);
         }
-        catch (Exception ex) when (EmitFailure("HashGetAll", key, ex)) { }
+        catch (Exception ex) when (EmitFailure("HashGetAll", key, ex, start)) { }
         return this;
     }
 
@@ -220,20 +229,46 @@ public class RedisSystem(RedisSystemOptions options)
         if (_container != null) await _container.DisposeAsync();
     }
 
-    private void Emit(string action, string? input, string? output)
-        => _emitter?.Emit(new StoveEntry
+    private void Emit(string action, string? input, string? output, DateTimeOffset start)
+    {
+        if (_emitter == null) return;
+        var traceId = _emitter.CurrentTraceId;
+        _emitter.Emit(new StoveEntry
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            TestId = _emitter.CurrentTestId, TraceId = traceId,
+            System = SystemName, Action = action,
             Result = EntryResult.Success, Input = input, Output = output
         });
-
-    private bool EmitFailure(string action, string? input, Exception ex)
-    {
-        _emitter?.Emit(new StoveEntry
+        _emitter.EmitSpan(new StoveSpan
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
-            Result = EntryResult.Failed, Input = input, Error = ex.Message
+            TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+            ParentSpanId = _emitter.CurrentSpanId,
+            OperationName = action, ServiceName = SystemName,
+            Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
         });
+    }
+
+    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
+    {
+        if (_emitter != null)
+        {
+            var traceId = _emitter.CurrentTraceId;
+            _emitter.Emit(new StoveEntry
+            {
+                TestId = _emitter.CurrentTestId, TraceId = traceId,
+                System = SystemName, Action = action,
+                Result = EntryResult.Failed, Input = input, Error = ex.Message
+            });
+            _emitter.EmitSpan(new StoveSpan
+            {
+                TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+                ParentSpanId = _emitter.CurrentSpanId,
+                OperationName = action, ServiceName = SystemName,
+                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
+                    ex.StackTrace?.Split('\n') ?? [])
+            });
+        }
         return false;
     }
 }

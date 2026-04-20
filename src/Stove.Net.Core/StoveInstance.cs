@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Stove.Net.Core.Exceptions;
 
 namespace Stove.Net.Core;
@@ -16,6 +17,8 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     private readonly string _runId = Guid.NewGuid().ToString("N");
 
     private string _currentTestId = string.Empty;
+    private string _currentTraceId = string.Empty;
+    private string _currentSpanId = string.Empty;
     private DateTimeOffset _testStartedAt;
     private int _totalTests;
     private int _passedTests;
@@ -28,10 +31,23 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     public string CurrentTestId => _currentTestId;
 
     /// <inheritdoc/>
+    public string CurrentTraceId => _currentTraceId;
+
+    /// <inheritdoc/>
+    public string CurrentSpanId => _currentSpanId;
+
+    /// <inheritdoc/>
     public void Emit(StoveEntry entry)
     {
         foreach (var listener in _listeners)
             listener.OnEntryRecorded(entry);
+    }
+
+    /// <inheritdoc/>
+    public void EmitSpan(StoveSpan span)
+    {
+        foreach (var listener in _listeners)
+            listener.OnSpanRecorded(span);
     }
 
     // ---- Listener registration ----
@@ -156,11 +172,51 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
             await system.CleanupAsync();
     }
 
-    /// <summary>Entry point for test validation. Use this in your test methods.</summary>
-    public async Task Validate(Func<ValidationDsl, Task> validation)
+    /// <summary>
+    /// Entry point for test validation. Creates a trace (root span) that wraps all
+    /// system assertions inside the callback. The caller method name is captured
+    /// automatically via [CallerMemberName] and used as the root span operation name.
+    /// </summary>
+    public async Task Validate(
+        Func<ValidationDsl, Task> validation,
+        [CallerMemberName] string callerName = "")
     {
+        var traceId = Guid.NewGuid().ToString("N");
+        var rootSpanId = StoveSpan.NewSpanId();
+        var prevTraceId = _currentTraceId;
+        var prevSpanId = _currentSpanId;
+        _currentTraceId = traceId;
+        _currentSpanId = rootSpanId;
+        var start = DateTimeOffset.UtcNow;
+
         var dsl = new ValidationDsl(this);
-        await validation(dsl);
+        try
+        {
+            await validation(dsl);
+            EmitSpan(new StoveSpan
+            {
+                TraceId = traceId, SpanId = rootSpanId, ParentSpanId = string.Empty,
+                OperationName = callerName, ServiceName = "Validate",
+                Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
+            });
+        }
+        catch (Exception ex)
+        {
+            EmitSpan(new StoveSpan
+            {
+                TraceId = traceId, SpanId = rootSpanId, ParentSpanId = string.Empty,
+                OperationName = callerName, ServiceName = "Validate",
+                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Exception = new StoveExceptionInfo(
+                    ex.GetType().Name, ex.Message, ex.StackTrace?.Split('\n') ?? [])
+            });
+            throw;
+        }
+        finally
+        {
+            _currentTraceId = prevTraceId;
+            _currentSpanId = prevSpanId;
+        }
     }
 
     public async ValueTask DisposeAsync()

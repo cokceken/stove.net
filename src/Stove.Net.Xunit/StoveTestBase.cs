@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Stove.Net.Core;
 using Xunit;
 
@@ -16,7 +17,7 @@ namespace Stove.Net.Xunit;
 ///
 ///     [Fact]
 ///     public async Task Product_is_returned()
-///         => await Stove.Validate(async ctx =>
+///         => await Validate(async ctx =>
 ///             await ctx.Http().GetAsync&lt;Product&gt;("/api/products/1",
 ///                 p => Assert.Equal("Widget", p.Name)));
 /// }
@@ -39,11 +40,11 @@ public abstract class StoveTestBase<TFixture>(TFixture fixture) : IAsyncLifetime
     /// Wraps Stove.Validate with failure tracking so OnTestEnded reports the correct status.
     /// Use this instead of Stove.Validate directly if you want accurate pass/fail in the dashboard.
     /// </summary>
-    protected async Task Validate(Func<ValidationDsl, Task> test)
+    protected async Task Validate(Func<ValidationDsl, Task> test, [CallerMemberName] string testName = "")
     {
         try
         {
-            await Stove.Validate(test);
+            await Stove.Validate(test, testName);
         }
         catch (Exception ex)
         {
@@ -65,9 +66,15 @@ public abstract class StoveTestBase<TFixture>(TFixture fixture) : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>Returns the test method name. Override to customise.</summary>
-    protected virtual string GetTestName() => GetType().Name;
+    /// <summary>Returns the test method name using xUnit v3 TestContext when available.</summary>
+    protected virtual string GetTestName()
+        => TestContext.Current?.TestCase?.TestMethodName
+           ?? TestContext.Current?.TestCase?.TestCaseDisplayName
+           ?? GetType().Name;
 
-    /// <summary>Returns the spec/class name shown in the dashboard. Override to customise.</summary>
-    protected virtual string GetSpecName() => GetType().Namespace ?? string.Empty;
+    /// <summary>Returns the spec/class name shown in the dashboard.</summary>
+    protected virtual string GetSpecName()
+        => TestContext.Current?.TestCase?.TestClassName
+           ?? GetType().FullName
+           ?? GetType().Name;
 }

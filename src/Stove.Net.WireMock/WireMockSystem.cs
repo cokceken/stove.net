@@ -113,6 +113,7 @@ public class WireMockSystem(WireMockSystemOptions options)
     public WireMockSystem ShouldHaveReceivedBody(string path, string? httpMethod, Action<string?>? validate,
         int expectedCount = 1)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var matching = Server.LogEntries
@@ -134,9 +135,9 @@ public class WireMockSystem(WireMockSystemOptions options)
                 validate(last?.RequestMessage?.Body);
             }
 
-            Emit("ShouldHaveReceived", $"{httpMethod} {path}", $"{matching.Count} request(s)");
+            Emit("ShouldHaveReceived", $"{httpMethod} {path}", $"{matching.Count} request(s)", start);
         }
-        catch (Exception ex) when (EmitFailure("ShouldHaveReceived", $"{httpMethod} {path}", ex)) { }
+        catch (Exception ex) when (EmitFailure("ShouldHaveReceived", $"{httpMethod} {path}", ex, start)) { }
 
         return this;
     }
@@ -171,20 +172,46 @@ public class WireMockSystem(WireMockSystemOptions options)
         return ValueTask.CompletedTask;
     }
 
-    private void Emit(string action, string? input, string? output)
-        => _emitter?.Emit(new StoveEntry
+    private void Emit(string action, string? input, string? output, DateTimeOffset start)
+    {
+        if (_emitter == null) return;
+        var traceId = _emitter.CurrentTraceId;
+        _emitter.Emit(new StoveEntry
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            TestId = _emitter.CurrentTestId, TraceId = traceId,
+            System = SystemName, Action = action,
             Result = EntryResult.Success, Input = input, Output = output
         });
-
-    private bool EmitFailure(string action, string? input, Exception ex)
-    {
-        _emitter?.Emit(new StoveEntry
+        _emitter.EmitSpan(new StoveSpan
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
-            Result = EntryResult.Failed, Input = input, Error = ex.Message
+            TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+            ParentSpanId = _emitter.CurrentSpanId,
+            OperationName = action, ServiceName = SystemName,
+            Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
         });
+    }
+
+    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
+    {
+        if (_emitter != null)
+        {
+            var traceId = _emitter.CurrentTraceId;
+            _emitter.Emit(new StoveEntry
+            {
+                TestId = _emitter.CurrentTestId, TraceId = traceId,
+                System = SystemName, Action = action,
+                Result = EntryResult.Failed, Input = input, Error = ex.Message
+            });
+            _emitter.EmitSpan(new StoveSpan
+            {
+                TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+                ParentSpanId = _emitter.CurrentSpanId,
+                OperationName = action, ServiceName = SystemName,
+                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
+                    ex.StackTrace?.Split('\n') ?? [])
+            });
+        }
         return false;
     }
 }

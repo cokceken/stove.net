@@ -10,6 +10,7 @@ internal sealed class CaptureListener : IStoveEventListener
     public List<(string runId, string appName, IReadOnlyList<string> systems)> RunsStarted { get; } = new();
     public List<(string testId, string testName, string specName)> TestsStarted { get; } = new();
     public List<StoveEntry> EntriesRecorded { get; } = new();
+    public List<StoveSpan> SpansRecorded { get; } = new();
     public List<(string testId, TimeSpan duration, string? error)> TestsEnded { get; } = new();
     public List<(int total, int passed, int failed, TimeSpan duration)> RunsEnded { get; } = new();
 
@@ -21,6 +22,9 @@ internal sealed class CaptureListener : IStoveEventListener
 
     public void OnEntryRecorded(StoveEntry entry)
         => EntriesRecorded.Add(entry);
+
+    public void OnSpanRecorded(StoveSpan span)
+        => SpansRecorded.Add(span);
 
     public void OnTestEnded(string testId, TimeSpan duration, string? error)
         => TestsEnded.Add((testId, duration, error));

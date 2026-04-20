@@ -61,6 +61,7 @@ public class KafkaSystem(KafkaSystemOptions options)
     public async Task<KafkaSystem> PublishAsync<T>(
         string topic, T message, string? key = null, Dictionary<string, string>? headers = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var config = new ProducerConfig { BootstrapServers = BootstrapServers };
@@ -78,9 +79,9 @@ public class KafkaSystem(KafkaSystemOptions options)
 
             await producer.ProduceAsync(topic, kafkaMessage);
             producer.Flush(TimeSpan.FromSeconds(5));
-            Emit("Publish", $"{topic}:{key}", value);
+            Emit("Publish", $"{topic}:{key}", value, start);
         }
-        catch (Exception ex) when (EmitFailure("Publish", topic, ex)) { }
+        catch (Exception ex) when (EmitFailure("Publish", topic, ex, start)) { }
 
         return this;
     }
@@ -96,6 +97,7 @@ public class KafkaSystem(KafkaSystemOptions options)
 
     public async Task<KafkaSystem> ShouldBePublished<T>(Func<T, bool> predicate, TimeSpan? timeout = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var deadline = DateTime.UtcNow + (timeout ?? options.AssertionTimeout);
@@ -112,7 +114,7 @@ public class KafkaSystem(KafkaSystemOptions options)
                             var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
                             if (deserialized != null && predicate(deserialized))
                             {
-                                Emit("ShouldBePublished", typeof(T).Name, $"found on {msg.Topic}");
+                                Emit("ShouldBePublished", typeof(T).Name, $"found on {msg.Topic}", start);
                                 return this;
                             }
                         }
@@ -126,7 +128,7 @@ public class KafkaSystem(KafkaSystemOptions options)
                 $"No message of type {typeof(T).Name} matching the predicate was found within {(timeout ?? options.AssertionTimeout).TotalSeconds}s. " +
                 FormatCapturedSummary());
         }
-        catch (Exception ex) when (EmitFailure("ShouldBePublished", typeof(T).Name, ex)) { }
+        catch (Exception ex) when (EmitFailure("ShouldBePublished", typeof(T).Name, ex, start)) { }
 
         return this;
     }
@@ -134,6 +136,7 @@ public class KafkaSystem(KafkaSystemOptions options)
     public async Task<KafkaSystem> ShouldBePublished<T>(
         string topic, Func<T, bool> predicate, TimeSpan? timeout = null)
     {
+        var start = DateTimeOffset.UtcNow;
         try
         {
             var deadline = DateTime.UtcNow + (timeout ?? options.AssertionTimeout);
@@ -150,7 +153,7 @@ public class KafkaSystem(KafkaSystemOptions options)
                             var deserialized = JsonSerializer.Deserialize<T>(msg.Value);
                             if (deserialized != null && predicate(deserialized))
                             {
-                                Emit("ShouldBePublished", $"{topic}:{typeof(T).Name}", "found");
+                                Emit("ShouldBePublished", $"{topic}:{typeof(T).Name}", "found", start);
                                 return this;
                             }
                         }
@@ -166,7 +169,7 @@ public class KafkaSystem(KafkaSystemOptions options)
                 $"Topic '{topic}' has {topicCount} message(s). " +
                 FormatCapturedSummary());
         }
-        catch (Exception ex) when (EmitFailure("ShouldBePublished", $"{topic}:{typeof(T).Name}", ex)) { }
+        catch (Exception ex) when (EmitFailure("ShouldBePublished", $"{topic}:{typeof(T).Name}", ex, start)) { }
 
         return this;
     }
@@ -273,20 +276,46 @@ public class KafkaSystem(KafkaSystemOptions options)
         if (_container != null) await _container.DisposeAsync();
     }
 
-    private void Emit(string action, string? input, string? output)
-        => _emitter?.Emit(new StoveEntry
+    private void Emit(string action, string? input, string? output, DateTimeOffset start)
+    {
+        if (_emitter == null) return;
+        var traceId = _emitter.CurrentTraceId;
+        _emitter.Emit(new StoveEntry
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
+            TestId = _emitter.CurrentTestId, TraceId = traceId,
+            System = SystemName, Action = action,
             Result = EntryResult.Success, Input = input, Output = output
         });
-
-    private bool EmitFailure(string action, string? input, Exception ex)
-    {
-        _emitter?.Emit(new StoveEntry
+        _emitter.EmitSpan(new StoveSpan
         {
-            TestId = _emitter.CurrentTestId, System = SystemName, Action = action,
-            Result = EntryResult.Failed, Input = input, Error = ex.Message
+            TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+            ParentSpanId = _emitter.CurrentSpanId,
+            OperationName = action, ServiceName = SystemName,
+            Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
         });
+    }
+
+    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
+    {
+        if (_emitter != null)
+        {
+            var traceId = _emitter.CurrentTraceId;
+            _emitter.Emit(new StoveEntry
+            {
+                TestId = _emitter.CurrentTestId, TraceId = traceId,
+                System = SystemName, Action = action,
+                Result = EntryResult.Failed, Input = input, Error = ex.Message
+            });
+            _emitter.EmitSpan(new StoveSpan
+            {
+                TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
+                ParentSpanId = _emitter.CurrentSpanId,
+                OperationName = action, ServiceName = SystemName,
+                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
+                    ex.StackTrace?.Split('\n') ?? [])
+            });
+        }
         return false;
     }
 
