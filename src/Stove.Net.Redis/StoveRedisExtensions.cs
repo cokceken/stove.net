@@ -7,46 +7,43 @@ namespace Stove.Net.Redis;
 /// </summary>
 public static class StoveRedisExtensions
 {
-    /// <summary>
-    /// Register a Redis system (with Testcontainers) in the Stove builder.
-    /// </summary>
-    public static StoveBuilder WithRedis(
-        this StoveBuilder builder,
-        Action<RedisSystemOptions>? configure = null)
+    extension(StoveBuilder builder)
     {
-        var options = new RedisSystemOptions();
-        configure?.Invoke(options);
-        builder.WithSystem(new RedisSystem(options));
-        return builder;
+        /// <summary>
+        /// Register a Redis system (with Testcontainers) in the Stove builder.
+        /// </summary>
+        public StoveBuilder WithRedis(Action<RedisSystemOptions>? configure = null) =>
+            builder.WithRedis(SystemKey.DefaultName, configure);
+
+        /// <summary>
+        /// Register a named Redis system. Use when you need multiple Redis instances.
+        /// </summary>
+        public StoveBuilder WithRedis(string name,
+            Action<RedisSystemOptions>? configure = null)
+        {
+            var options = new RedisSystemOptions();
+            configure?.Invoke(options);
+            builder.WithSystem(new RedisSystem(options), name);
+            return builder;
+        }
     }
 
-    /// <summary>
-    /// Register a named Redis system. Use when you need multiple Redis instances.
-    /// </summary>
-    public static StoveBuilder WithRedis(
-        this StoveBuilder builder,
-        string name,
-        Action<RedisSystemOptions>? configure = null)
+    extension(ValidationDsl dsl)
     {
-        var options = new RedisSystemOptions();
-        configure?.Invoke(options);
-        builder.WithSystem(new RedisSystem(options), name);
-        return builder;
-    }
+        /// <summary>
+        /// Access the default Redis system in a validation block.
+        /// </summary>
+        public async Task Redis(Func<RedisSystem, Task> validation)
+        {
+            await validation(dsl.Get<RedisSystem>());
+        }
 
-    /// <summary>
-    /// Access the default Redis system in a validation block.
-    /// </summary>
-    public static async Task Redis(this ValidationDsl dsl, Func<RedisSystem, Task> validation)
-    {
-        await validation(dsl.Get<RedisSystem>());
-    }
-
-    /// <summary>
-    /// Access a named Redis system in a validation block.
-    /// </summary>
-    public static async Task Redis(this ValidationDsl dsl, string name, Func<RedisSystem, Task> validation)
-    {
-        await validation(dsl.Get<RedisSystem>(name));
+        /// <summary>
+        /// Access a named Redis system in a validation block.
+        /// </summary>
+        public async Task Redis(string name, Func<RedisSystem, Task> validation)
+        {
+            await validation(dsl.Get<RedisSystem>(name));
+        }
     }
 }

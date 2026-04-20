@@ -23,7 +23,7 @@ public sealed class StoveInstance : IAsyncDisposable
     /// of the same system type (e.g., two PostgreSQL databases).
     /// </summary>
     public void Register<TSystem>(TSystem system, string name) where TSystem : IPluggedSystem
-        => _systems[new SystemKey(typeof(TSystem), name)] = system;
+        => _systems[SystemKey.For<TSystem>(name)] = system;
 
     /// <summary>
     /// Get the default-named registered system by type, or throw if not registered.
@@ -36,7 +36,7 @@ public sealed class StoveInstance : IAsyncDisposable
     /// </summary>
     public TSystem GetSystem<TSystem>(string name) where TSystem : IPluggedSystem
     {
-        var key = new SystemKey(typeof(TSystem), name);
+        var key = SystemKey.For<TSystem>(name);
         if (_systems.TryGetValue(key, out var system))
             return (TSystem)system;
 
@@ -54,7 +54,7 @@ public sealed class StoveInstance : IAsyncDisposable
     /// </summary>
     public bool TryGetSystem<TSystem>(string name, out TSystem? system) where TSystem : class, IPluggedSystem
     {
-        if (_systems.TryGetValue(new SystemKey(typeof(TSystem), name), out var s))
+        if (_systems.TryGetValue(SystemKey.For<TSystem>(name), out var s))
         {
             system = (TSystem)s;
             return true;

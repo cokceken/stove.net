@@ -7,46 +7,43 @@ namespace Stove.Net.MongoDb;
 /// </summary>
 public static class StoveMongoDbExtensions
 {
-    /// <summary>
-    /// Register a MongoDB system (with Testcontainers) in the Stove builder.
-    /// </summary>
-    public static StoveBuilder WithMongoDb(
-        this StoveBuilder builder,
-        Action<MongoDbSystemOptions>? configure = null)
+    extension(StoveBuilder builder)
     {
-        var options = new MongoDbSystemOptions();
-        configure?.Invoke(options);
-        builder.WithSystem(new MongoDbSystem(options));
-        return builder;
+        /// <summary>
+        /// Register a MongoDB system (with Testcontainers) in the Stove builder.
+        /// </summary>
+        public StoveBuilder WithMongoDb(Action<MongoDbSystemOptions>? configure = null) =>
+            builder.WithMongoDb(SystemKey.DefaultName, configure);
+
+        /// <summary>
+        /// Register a named MongoDB system. Use when you need multiple MongoDB instances.
+        /// </summary>
+        public StoveBuilder WithMongoDb(string name,
+            Action<MongoDbSystemOptions>? configure = null)
+        {
+            var options = new MongoDbSystemOptions();
+            configure?.Invoke(options);
+            builder.WithSystem(new MongoDbSystem(options), name);
+            return builder;
+        }
     }
 
-    /// <summary>
-    /// Register a named MongoDB system. Use when you need multiple MongoDB instances.
-    /// </summary>
-    public static StoveBuilder WithMongoDb(
-        this StoveBuilder builder,
-        string name,
-        Action<MongoDbSystemOptions>? configure = null)
+    extension(ValidationDsl dsl)
     {
-        var options = new MongoDbSystemOptions();
-        configure?.Invoke(options);
-        builder.WithSystem(new MongoDbSystem(options), name);
-        return builder;
-    }
+        /// <summary>
+        /// Access the default MongoDB system in a validation block.
+        /// </summary>
+        public async Task MongoDb(Func<MongoDbSystem, Task> validation)
+        {
+            await validation(dsl.Get<MongoDbSystem>());
+        }
 
-    /// <summary>
-    /// Access the default MongoDB system in a validation block.
-    /// </summary>
-    public static async Task MongoDb(this ValidationDsl dsl, Func<MongoDbSystem, Task> validation)
-    {
-        await validation(dsl.Get<MongoDbSystem>());
-    }
-
-    /// <summary>
-    /// Access a named MongoDB system in a validation block.
-    /// </summary>
-    public static async Task MongoDb(this ValidationDsl dsl, string name, Func<MongoDbSystem, Task> validation)
-    {
-        await validation(dsl.Get<MongoDbSystem>(name));
+        /// <summary>
+        /// Access a named MongoDB system in a validation block.
+        /// </summary>
+        public async Task MongoDb(string name, Func<MongoDbSystem, Task> validation)
+        {
+            await validation(dsl.Get<MongoDbSystem>(name));
+        }
     }
 }
