@@ -280,11 +280,26 @@ public class KafkaSystem(KafkaSystemOptions options)
     {
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
+        var metadata = new Dictionary<string, string> { ["messaging.system"] = "kafka" };
+        if (input != null)
+        {
+            var colonIdx = input.IndexOf(':');
+            if (colonIdx > 0)
+            {
+                metadata["messaging.destination"] = input[..colonIdx];
+                metadata["messaging.kafka.message.key"] = input[(colonIdx + 1)..];
+            }
+            else
+            {
+                metadata["messaging.destination"] = input;
+            }
+        }
         _emitter.Emit(new StoveEntry
         {
             TestId = _emitter.CurrentTestId, TraceId = traceId,
             System = SystemName, Action = action,
-            Result = EntryResult.Success, Input = input, Output = output
+            Result = EntryResult.Success, Input = input, Output = output,
+            Metadata = metadata
         });
         _emitter.EmitSpan(new StoveSpan
         {
@@ -300,11 +315,14 @@ public class KafkaSystem(KafkaSystemOptions options)
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;
+            var metadata = new Dictionary<string, string> { ["messaging.system"] = "kafka" };
+            if (input != null) metadata["messaging.destination"] = input;
             _emitter.Emit(new StoveEntry
             {
                 TestId = _emitter.CurrentTestId, TraceId = traceId,
                 System = SystemName, Action = action,
-                Result = EntryResult.Failed, Input = input, Error = ex.Message
+                Result = EntryResult.Failed, Input = input, Error = ex.Message,
+                Metadata = metadata
             });
             _emitter.EmitSpan(new StoveSpan
             {

@@ -227,11 +227,22 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
     {
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
+        var metadata = new Dictionary<string, string>
+        {
+            ["http.method"] = action,
+            ["http.url"] = input ?? string.Empty
+        };
+        if (output != null)
+        {
+            var spaceIdx = output.IndexOf(' ');
+            if (spaceIdx > 0) metadata["http.status_code"] = output[..spaceIdx];
+        }
         _emitter.Emit(new StoveEntry
         {
             TestId = _emitter.CurrentTestId, TraceId = traceId,
             System = SystemName, Action = action,
-            Result = EntryResult.Success, Input = input, Output = output
+            Result = EntryResult.Success, Input = input, Output = output,
+            Metadata = metadata
         });
         _emitter.EmitSpan(new StoveSpan
         {
@@ -247,11 +258,17 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;
+            var metadata = new Dictionary<string, string>
+            {
+                ["http.method"] = action,
+                ["http.url"] = input ?? string.Empty
+            };
             _emitter.Emit(new StoveEntry
             {
                 TestId = _emitter.CurrentTestId, TraceId = traceId,
                 System = SystemName, Action = action,
-                Result = EntryResult.Failed, Input = input, Error = ex.Message
+                Result = EntryResult.Failed, Input = input, Error = ex.Message,
+                Metadata = metadata
             });
             _emitter.EmitSpan(new StoveSpan
             {

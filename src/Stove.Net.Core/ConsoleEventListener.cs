@@ -75,7 +75,35 @@ public sealed class ConsoleEventListener : IStoveEventListener
     {
         var parts = new List<string>();
 
-        if (!string.IsNullOrEmpty(entry.Input))
+        // Show key metadata inline when available
+        if (entry.Metadata is { Count: > 0 })
+        {
+            if (entry.Metadata.TryGetValue("http.method", out var method) &&
+                entry.Metadata.TryGetValue("http.url", out var url))
+            {
+                var status = entry.Metadata.GetValueOrDefault("http.status_code", "");
+                parts.Add($"{method} {url} [{status}]".TrimEnd());
+            }
+            else if (entry.Metadata.TryGetValue("db.statement", out var sql))
+            {
+                parts.Add(Truncate(sql, 80));
+            }
+            else if (entry.Metadata.TryGetValue("messaging.destination", out var topic))
+            {
+                var key = entry.Metadata.GetValueOrDefault("messaging.kafka.message.key", "");
+                parts.Add(string.IsNullOrEmpty(key) ? topic : $"{topic}:{key}");
+            }
+            else if (entry.Metadata.TryGetValue("db.collection", out var coll))
+            {
+                parts.Add(coll);
+            }
+            else if (entry.Metadata.TryGetValue("redis.key", out var redisKey))
+            {
+                parts.Add(redisKey);
+            }
+        }
+
+        if (parts.Count == 0 && !string.IsNullOrEmpty(entry.Input))
             parts.Add(Truncate(entry.Input, 80));
 
         if (!string.IsNullOrEmpty(entry.Output))

@@ -176,11 +176,27 @@ public class WireMockSystem(WireMockSystemOptions options)
     {
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
+        var metadata = new Dictionary<string, string>();
+        if (input != null)
+        {
+            var spaceIdx = input.IndexOf(' ');
+            if (spaceIdx > 0)
+            {
+                metadata["http.method"] = input[..spaceIdx];
+                metadata["http.url"] = input[(spaceIdx + 1)..];
+            }
+            else
+            {
+                metadata["http.url"] = input;
+            }
+        }
+        if (_server != null) metadata["wiremock.stub_count"] = _server.Mappings.Count().ToString();
         _emitter.Emit(new StoveEntry
         {
             TestId = _emitter.CurrentTestId, TraceId = traceId,
             System = SystemName, Action = action,
-            Result = EntryResult.Success, Input = input, Output = output
+            Result = EntryResult.Success, Input = input, Output = output,
+            Metadata = metadata
         });
         _emitter.EmitSpan(new StoveSpan
         {
@@ -196,11 +212,22 @@ public class WireMockSystem(WireMockSystemOptions options)
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;
+            var metadata = new Dictionary<string, string>();
+            if (input != null)
+            {
+                var spaceIdx = input.IndexOf(' ');
+                if (spaceIdx > 0)
+                {
+                    metadata["http.method"] = input[..spaceIdx];
+                    metadata["http.url"] = input[(spaceIdx + 1)..];
+                }
+            }
             _emitter.Emit(new StoveEntry
             {
                 TestId = _emitter.CurrentTestId, TraceId = traceId,
                 System = SystemName, Action = action,
-                Result = EntryResult.Failed, Input = input, Error = ex.Message
+                Result = EntryResult.Failed, Input = input, Error = ex.Message,
+                Metadata = metadata
             });
             _emitter.EmitSpan(new StoveSpan
             {

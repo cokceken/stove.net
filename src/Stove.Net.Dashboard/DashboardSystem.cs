@@ -64,23 +64,28 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
 
     public void OnEntryRecorded(StoveEntry entry)
     {
-        Enqueue(new DashboardEvent
+        var evt = new EntryRecordedEvent
         {
-            RunId = _runId,
-            EntryRecorded = new EntryRecordedEvent
-            {
-                TestId = entry.TestId ?? string.Empty,
-                Timestamp = Timestamp.FromDateTimeOffset(entry.Timestamp),
-                System = entry.System ?? string.Empty,
-                Action = entry.Action ?? string.Empty,
-                Result = entry.Result.ToString(),
-                Input = entry.Input ?? string.Empty,
-                Output = entry.Output ?? string.Empty,
-                Expected = entry.Expected ?? string.Empty,
-                Actual = entry.Actual ?? string.Empty,
-                Error = entry.Error ?? string.Empty
-            }
-        });
+            TestId = entry.TestId ?? string.Empty,
+            Timestamp = Timestamp.FromDateTimeOffset(entry.Timestamp),
+            System = entry.System ?? string.Empty,
+            Action = entry.Action ?? string.Empty,
+            Result = entry.Result.ToString(),
+            Input = entry.Input ?? string.Empty,
+            Output = entry.Output ?? string.Empty,
+            Expected = entry.Expected ?? string.Empty,
+            Actual = entry.Actual ?? string.Empty,
+            Error = entry.Error ?? string.Empty,
+            TraceId = entry.TraceId ?? string.Empty
+        };
+
+        if (entry.Metadata is { Count: > 0 })
+        {
+            foreach (var (k, v) in entry.Metadata)
+                evt.Metadata.Add(k, v);
+        }
+
+        Enqueue(new DashboardEvent { RunId = _runId, EntryRecorded = evt });
     }
 
     public void OnTestEnded(string testId, TimeSpan duration, string? error)
