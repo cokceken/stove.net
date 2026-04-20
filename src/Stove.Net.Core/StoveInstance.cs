@@ -20,6 +20,10 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
     private static readonly ActivitySource StoveActivitySource = new("Stove.Net");
 
+    /// <summary>Header/baggage key used to propagate test IDs across service boundaries.</summary>
+    public const string StoveTestIdHeaderName = "X-Stove-Test-Id";
+    internal const string StoveTestIdBaggageKey = "stove.test.id";
+
     // Ensure the Stove ActivitySource always creates activities (for trace propagation)
     // even when no InProcessTraceCollector is configured.
     private static readonly ActivityListener StoveInternalListener = CreateStoveListener();
@@ -59,8 +63,22 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     /// <inheritdoc/>
     public void Emit(StoveEntry entry)
     {
+        // Enrich all entries with test ID in metadata for cross-service correlation
+        var enriched = entry;
+        if (!string.IsNullOrEmpty(_currentTestId) && entry.Metadata != null)
+        {
+            entry.Metadata.TryAdd(StoveTestIdBaggageKey, _currentTestId);
+        }
+        else if (!string.IsNullOrEmpty(_currentTestId))
+        {
+            enriched = entry with
+            {
+                Metadata = new Dictionary<string, string> { [StoveTestIdBaggageKey] = _currentTestId }
+            };
+        }
+
         foreach (var listener in _listeners)
-            listener.OnEntryRecorded(entry);
+            listener.OnEntryRecorded(enriched);
     }
 
     /// <inheritdoc/>
@@ -93,12 +111,14 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
     /// <summary>
     /// Notify listeners that a new test has started. Call this before each test method.
+    /// Also adds the test ID to Activity.Baggage for cross-service correlation.
     /// </summary>
     public void NotifyTestStarted(string testId, string testName, string specName = "")
     {
         _currentTestId = testId;
         _testStartedAt = DateTimeOffset.UtcNow;
         _totalTests++;
+        Activity.Current?.AddBaggage(StoveTestIdHeaderName, testId);
         foreach (var listener in _listeners)
             listener.OnTestStarted(testId, testName, specName);
     }
@@ -251,6 +271,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
         using var activity = StoveActivitySource.StartActivity(
             callerName, ActivityKind.Internal, parentContext);
+        activity?.AddBaggage(StoveTestIdBaggageKey, _currentTestId);
 
         var start = DateTimeOffset.UtcNow;
         var dsl = new ValidationDsl(this);

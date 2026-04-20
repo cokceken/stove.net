@@ -72,12 +72,18 @@ public class KafkaSystem(KafkaSystemOptions options)
             var value = JsonSerializer.Serialize(message);
             var kafkaMessage = new Message<string?, string> { Key = key, Value = value };
 
+            kafkaMessage.Headers = new Headers();
             if (headers != null)
             {
-                kafkaMessage.Headers = new Headers();
                 foreach (var (k, v) in headers)
                     kafkaMessage.Headers.Add(k, System.Text.Encoding.UTF8.GetBytes(v));
             }
+
+            // Inject test ID for per-test correlation (like Kotlin Stove's X-Stove-Test-Id)
+            var testId = _emitter?.CurrentTestId;
+            if (!string.IsNullOrEmpty(testId))
+                kafkaMessage.Headers.Add(StoveInstance.StoveTestIdHeaderName,
+                    System.Text.Encoding.UTF8.GetBytes(testId));
 
             await producer.ProduceAsync(topic, kafkaMessage);
             producer.Flush(TimeSpan.FromSeconds(5));
