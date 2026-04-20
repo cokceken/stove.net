@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Stove.Net.Core;
 using WireMock.Admin.Mappings;
 using WireMock.RequestBuilders;
@@ -12,11 +13,13 @@ namespace Stove.Net.WireMock;
 /// for intercepting external API calls made by the application under test.
 /// </summary>
 public class WireMockSystem(WireMockSystemOptions options)
-    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem, IReportsState
 {
     private const string SystemName = "WireMock";
     private WireMockServer? _server;
     private IStoveEventEmitter? _emitter;
+    private int _assertionCount;
+    private int _failedCount;
 
     public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
 
@@ -172,8 +175,27 @@ public class WireMockSystem(WireMockSystemOptions options)
         return ValueTask.CompletedTask;
     }
 
+    public StoveSnapshot Report()
+    {
+        var stubCount = _server?.Mappings.Count() ?? 0;
+        var requestLogCount = _server?.LogEntries.Count() ?? 0;
+        return new StoveSnapshot
+        {
+            System = SystemName,
+            StateJson = JsonSerializer.Serialize(new
+            {
+                stubCount,
+                requestLogCount,
+                assertionCount = _assertionCount,
+                failedCount = _failedCount
+            }),
+            Summary = $"{stubCount} stub(s), {requestLogCount} request(s) logged, {_assertionCount} assertion(s)"
+        };
+    }
+
     private void Emit(string action, string? input, string? output, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _assertionCount);
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
         var metadata = new Dictionary<string, string>();
@@ -209,6 +231,7 @@ public class WireMockSystem(WireMockSystemOptions options)
 
     private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;

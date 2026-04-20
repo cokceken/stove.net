@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DotNet.Testcontainers.Images;
 using Npgsql;
 using Stove.Net.Core;
@@ -10,12 +11,14 @@ namespace Stove.Net.PostgreSql;
 /// and provides query/execute assertion methods.
 /// </summary>
 public class PostgreSqlSystem(PostgreSqlSystemOptions options)
-    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem, IReportsState
 {
     private const string SystemName = "PostgreSql";
     private PostgreSqlContainer? _container;
     private string? _connectionString;
     private IStoveEventEmitter? _emitter;
+    private int _operationCount;
+    private int _failedCount;
 
     public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
 
@@ -199,8 +202,16 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
 
     // --- Emit helpers ---
 
+    public StoveSnapshot Report() => new()
+    {
+        System = SystemName,
+        StateJson = JsonSerializer.Serialize(new { operationCount = _operationCount, failedCount = _failedCount }),
+        Summary = $"{_operationCount} operation(s), {_failedCount} failed"
+    };
+
     private void Emit(string action, string? input, string? output, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _operationCount);
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
         var metadata = new Dictionary<string, string> { ["db.system"] = "postgresql" };
@@ -223,6 +234,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
 
     private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;

@@ -13,7 +13,7 @@ namespace Stove.Net.Kafka;
 /// publish/assertion methods.
 /// </summary>
 public class KafkaSystem(KafkaSystemOptions options)
-    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem, IReportsState
 {
     private const string SystemName = "Kafka";
     private KafkaContainer? _container;
@@ -22,6 +22,8 @@ public class KafkaSystem(KafkaSystemOptions options)
     private CancellationTokenSource? _consumerCts;
     private Task? _consumerTask;
     private IStoveEventEmitter? _emitter;
+    private int _publishCount;
+    private int _failedCount;
 
     public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
 
@@ -276,8 +278,27 @@ public class KafkaSystem(KafkaSystemOptions options)
         if (_container != null) await _container.DisposeAsync();
     }
 
+    public StoveSnapshot Report()
+    {
+        var capturedCount = _messagesByTopic.Values.Sum(q => q.Count);
+        var topicCounts = _messagesByTopic.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Count);
+        return new StoveSnapshot
+        {
+            System = SystemName,
+            StateJson = JsonSerializer.Serialize(new
+            {
+                publishCount = _publishCount,
+                capturedMessageCount = capturedCount,
+                failedCount = _failedCount,
+                topicCounts
+            }),
+            Summary = $"{_publishCount} published, {capturedCount} captured, {_failedCount} failed"
+        };
+    }
+
     private void Emit(string action, string? input, string? output, DateTimeOffset start)
     {
+        if (action == "Publish") Interlocked.Increment(ref _publishCount);
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
         var metadata = new Dictionary<string, string> { ["messaging.system"] = "kafka" };
@@ -312,6 +333,7 @@ public class KafkaSystem(KafkaSystemOptions options)
 
     private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;

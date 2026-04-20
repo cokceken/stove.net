@@ -11,13 +11,15 @@ namespace Stove.Net.Redis;
 /// and provides get/set/assertion methods for e2e testing.
 /// </summary>
 public class RedisSystem(RedisSystemOptions options)
-    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem, IReportsState
 {
     private const string SystemName = "Redis";
     private RedisContainer? _container;
     private string? _connectionString;
     private ConnectionMultiplexer? _multiplexer;
     private IStoveEventEmitter? _emitter;
+    private int _operationCount;
+    private int _failedCount;
 
     public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
 
@@ -229,8 +231,16 @@ public class RedisSystem(RedisSystemOptions options)
         if (_container != null) await _container.DisposeAsync();
     }
 
+    public StoveSnapshot Report() => new()
+    {
+        System = SystemName,
+        StateJson = JsonSerializer.Serialize(new { operationCount = _operationCount, failedCount = _failedCount }),
+        Summary = $"{_operationCount} operation(s), {_failedCount} failed"
+    };
+
     private void Emit(string action, string? input, string? output, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _operationCount);
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
         var metadata = new Dictionary<string, string>
@@ -257,6 +267,7 @@ public class RedisSystem(RedisSystemOptions options)
 
     private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;

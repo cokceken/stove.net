@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Stove.Net.Core;
 
 namespace Stove.Net.Http;
@@ -7,11 +8,13 @@ namespace Stove.Net.Http;
 /// HTTP client system for making requests and asserting responses.
 /// All methods return HttpClientSystem for chaining.
 /// </summary>
-public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
+public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsState
 {
     private const string SystemName = "Http";
     private HttpClient? _httpClient;
     private IStoveEventEmitter? _emitter;
+    private int _requestCount;
+    private int _failedCount;
 
     public void SetEmitter(IStoveEventEmitter emitter) => _emitter = emitter;
 
@@ -223,8 +226,16 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
             request.Headers.TryAddWithoutValidation(key, value);
     }
 
+    public StoveSnapshot Report() => new()
+    {
+        System = SystemName,
+        StateJson = JsonSerializer.Serialize(new { requestCount = _requestCount, failedCount = _failedCount }),
+        Summary = $"{_requestCount} request(s), {_failedCount} failed"
+    };
+
     private void Emit(string action, string? input, string? output, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _requestCount);
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
         var metadata = new Dictionary<string, string>
@@ -255,6 +266,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem
 
     private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
     {
+        Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;

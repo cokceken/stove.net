@@ -105,12 +105,29 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
     /// <summary>
     /// Notify listeners that the current test has ended. Call this after each test method.
+    /// Before emitting OnTestEnded, collects state snapshots from all systems implementing IReportsState.
     /// </summary>
     public void NotifyTestEnded(bool passed, string? error = null)
     {
         var duration = DateTimeOffset.UtcNow - _testStartedAt;
         if (passed) _passedTests++;
         else _failedTests++;
+
+        // Auto-collect snapshots from all reporting systems (like Kotlin's Reports interface)
+        foreach (var system in _systems.Values.OfType<IReportsState>())
+        {
+            try
+            {
+                var snapshot = system.Report();
+                if (snapshot != null)
+                    EmitSnapshot(snapshot with { TestId = _currentTestId, TraceId = _currentTraceId });
+            }
+            catch (Exception)
+            {
+                // Don't let snapshot collection failures break the test lifecycle
+            }
+        }
+
         foreach (var listener in _listeners)
             listener.OnTestEnded(_currentTestId, duration, error);
         _currentTestId = string.Empty;
