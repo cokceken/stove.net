@@ -113,14 +113,15 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     /// Notify listeners that a new test has started. Call this before each test method.
     /// Also adds the test ID to Activity.Baggage for cross-service correlation.
     /// </summary>
-    public void NotifyTestStarted(string testId, string testName, string specName = "")
+    public void NotifyTestStarted(string testId, string testName, string specName = "",
+        string[]? testPath = null)
     {
         _currentTestId = testId;
         _testStartedAt = DateTimeOffset.UtcNow;
         _totalTests++;
         Activity.Current?.AddBaggage(StoveTestIdHeaderName, testId);
         foreach (var listener in _listeners)
-            listener.OnTestStarted(testId, testName, specName);
+            listener.OnTestStarted(testId, testName, specName, testPath);
     }
 
     /// <summary>

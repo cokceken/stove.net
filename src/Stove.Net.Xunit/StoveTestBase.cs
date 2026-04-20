@@ -56,7 +56,7 @@ public abstract class StoveTestBase<TFixture>(TFixture fixture) : IAsyncLifetime
 
     public virtual ValueTask InitializeAsync()
     {
-        Stove.NotifyTestStarted(_testId, GetTestName(), GetSpecName());
+        Stove.NotifyTestStarted(_testId, GetTestName(), GetSpecName(), GetTestPath());
         return ValueTask.CompletedTask;
     }
 
@@ -77,4 +77,29 @@ public abstract class StoveTestBase<TFixture>(TFixture fixture) : IAsyncLifetime
         => TestContext.Current?.TestCase?.TestClassName
            ?? GetType().FullName
            ?? GetType().Name;
+
+    /// <summary>
+    /// Builds a hierarchical test path from xUnit TestContext for dashboard visualization.
+    /// Returns segments like ["Namespace", "ClassName", "MethodName"].
+    /// </summary>
+    protected virtual string[]? GetTestPath()
+    {
+        var className = TestContext.Current?.TestCase?.TestClassName;
+        var methodName = TestContext.Current?.TestCase?.TestMethodName;
+        if (className == null || methodName == null) return null;
+
+        var parts = new List<string>();
+        var lastDot = className.LastIndexOf('.');
+        if (lastDot > 0)
+        {
+            parts.Add(className[..lastDot]); // namespace
+            parts.Add(className[(lastDot + 1)..]); // class
+        }
+        else
+        {
+            parts.Add(className);
+        }
+        parts.Add(methodName);
+        return parts.ToArray();
+    }
 }

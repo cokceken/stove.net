@@ -47,19 +47,19 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
         });
     }
 
-    public void OnTestStarted(string testId, string testName, string specName)
+    public void OnTestStarted(string testId, string testName, string specName, string[]? testPath = null)
     {
-        Enqueue(new DashboardEvent
+        var evt = new TestStartedEvent
         {
-            RunId = _runId,
-            TestStarted = new TestStartedEvent
-            {
-                TestId = testId,
-                TestName = testName,
-                SpecName = specName ?? string.Empty,
-                Timestamp = Timestamp.FromDateTimeOffset(DateTimeOffset.UtcNow)
-            }
-        });
+            TestId = testId,
+            TestName = testName,
+            SpecName = specName ?? string.Empty,
+            Timestamp = Timestamp.FromDateTimeOffset(DateTimeOffset.UtcNow)
+        };
+        if (testPath is { Length: > 0 })
+            evt.TestPath.AddRange(testPath);
+
+        Enqueue(new DashboardEvent { RunId = _runId, TestStarted = evt });
     }
 
     public void OnEntryRecorded(StoveEntry entry)

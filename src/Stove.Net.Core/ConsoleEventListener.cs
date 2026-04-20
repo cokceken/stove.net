@@ -16,9 +16,15 @@ public sealed class ConsoleEventListener : IStoveEventListener
         Console.WriteLine($"{Prefix} Run started — systems: {systemList}");
     }
 
-    public void OnTestStarted(string testId, string testName, string specName)
+    public void OnTestStarted(string testId, string testName, string specName, string[]? testPath = null)
     {
-        var label = string.IsNullOrEmpty(specName) ? testName : $"{specName} › {testName}";
+        string label;
+        if (testPath is { Length: > 0 })
+            label = string.Join(" › ", testPath);
+        else if (!string.IsNullOrEmpty(specName))
+            label = $"{specName} › {testName}";
+        else
+            label = testName;
         Console.WriteLine($"{Prefix} ▶ {label}");
     }
 

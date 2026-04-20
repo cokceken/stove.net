@@ -8,7 +8,7 @@ namespace Stove.Net.Tests.Dashboard.Tests;
 internal sealed class CaptureListener : IStoveEventListener
 {
     public List<(string runId, string appName, IReadOnlyList<string> systems)> RunsStarted { get; } = new();
-    public List<(string testId, string testName, string specName)> TestsStarted { get; } = new();
+    public List<(string testId, string testName, string specName, string[]? testPath)> TestsStarted { get; } = new();
     public List<StoveEntry> EntriesRecorded { get; } = new();
     public List<StoveSpan> SpansRecorded { get; } = new();
     public List<StoveSnapshot> SnapshotsRecorded { get; } = new();
@@ -18,8 +18,8 @@ internal sealed class CaptureListener : IStoveEventListener
     public void OnRunStarted(string runId, string appName, IReadOnlyList<string> systems)
         => RunsStarted.Add((runId, appName, systems));
 
-    public void OnTestStarted(string testId, string testName, string specName)
-        => TestsStarted.Add((testId, testName, specName));
+    public void OnTestStarted(string testId, string testName, string specName, string[]? testPath = null)
+        => TestsStarted.Add((testId, testName, specName, testPath));
 
     public void OnEntryRecorded(StoveEntry entry)
         => EntriesRecorded.Add(entry);
