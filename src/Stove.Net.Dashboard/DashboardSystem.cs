@@ -65,6 +65,9 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
 
     public void OnEntryRecorded(StoveEntry entry)
     {
+        // Dashboard rejects entries with empty testId — skip them
+        if (string.IsNullOrEmpty(entry.TestId)) return;
+
         var evt = new EntryRecordedEvent
         {
             TestId = entry.TestId ?? string.Empty,
@@ -132,6 +135,9 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
 
     public void OnSnapshotRecorded(StoveSnapshot snapshot)
     {
+        // Dashboard rejects snapshots with empty testId — skip them
+        if (string.IsNullOrEmpty(snapshot.TestId)) return;
+
         Enqueue(new DashboardEvent
         {
             RunId = _runId,

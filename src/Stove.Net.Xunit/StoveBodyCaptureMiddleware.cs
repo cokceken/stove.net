@@ -59,7 +59,13 @@ public sealed class StoveBodyCaptureMiddleware(
         }
 
         // Emit snapshot
-        var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? emitter.CurrentTraceId;
+        // On the server thread, AsyncLocal<testId> is not available.
+        // Read from Activity baggage which propagates via W3C baggage header.
+        var currentActivity = System.Diagnostics.Activity.Current;
+        var traceId = currentActivity?.TraceId.ToString() ?? emitter.CurrentTraceId;
+        var testId = emitter.CurrentTestId;
+        if (string.IsNullOrEmpty(testId))
+            testId = currentActivity?.GetBaggageItem(Core.StoveInstance.StoveTestIdBaggageKey) ?? string.Empty;
         var stateJson = JsonSerializer.Serialize(new
         {
             method = context.Request.Method,
@@ -76,7 +82,7 @@ public sealed class StoveBodyCaptureMiddleware(
 
         emitter.EmitSnapshot(new StoveSnapshot
         {
-            TestId = emitter.CurrentTestId,
+            TestId = testId,
             TraceId = traceId,
             System = "Http",
             StateJson = stateJson,

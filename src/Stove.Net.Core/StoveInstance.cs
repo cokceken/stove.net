@@ -23,7 +23,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
     /// <summary>Header/baggage key used to propagate test IDs across service boundaries.</summary>
     public const string StoveTestIdHeaderName = "X-Stove-Test-Id";
-    internal const string StoveTestIdBaggageKey = "stove.test.id";
+    public const string StoveTestIdBaggageKey = "stove.test.id";
 
     // Ensure the Stove ActivitySource always creates activities (for trace propagation)
     // even when no InProcessTraceCollector is configured.

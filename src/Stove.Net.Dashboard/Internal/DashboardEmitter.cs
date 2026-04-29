@@ -63,7 +63,7 @@ internal sealed class DashboardEmitter : IAsyncDisposable
         }
 
         Console.WriteLine(
-            $"[STOVE] Dashboard emitter stats: {_totalQueued} queued, {_totalSent} sent, {_totalFailed} failed");
+            $"[STOVE] Dashboard: {_totalQueued} queued, {_totalSent} sent, {_totalFailed} failed");
 
         await _cts.CancelAsync();
         _cts.Dispose();
@@ -98,10 +98,16 @@ internal sealed class DashboardEmitter : IAsyncDisposable
             Interlocked.Increment(ref _totalSent);
             _consecutiveFailures = 0;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             Interlocked.Increment(ref _totalFailed);
             _consecutiveFailures++;
+
+            if (_consecutiveFailures == 1)
+            {
+                Console.WriteLine($"[STOVE] Dashboard send error: {ex.Message}");
+            }
+
             if (_consecutiveFailures >= _options.MaxConsecutiveFailures)
             {
                 _disabled = true;

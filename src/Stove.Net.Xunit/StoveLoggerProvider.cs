@@ -114,6 +114,12 @@ internal sealed class StoveLogger(
         var activity = Activity.Current;
         var traceId = activity?.TraceId.ToString() ?? emitter.CurrentTraceId;
 
+        // On server threads, AsyncLocal<testId> isn't available.
+        // Fall back to Activity baggage which propagates via W3C baggage header.
+        var testId = emitter.CurrentTestId;
+        if (string.IsNullOrEmpty(testId))
+            testId = activity?.GetBaggageItem(StoveInstance.StoveTestIdBaggageKey) ?? string.Empty;
+
         // Shorten category for display: "MyApp.Services.OrderService" → "OrderService"
         var shortCategory = categoryName;
         var lastDot = categoryName.LastIndexOf('.');
@@ -135,7 +141,7 @@ internal sealed class StoveLogger(
 
         emitter.Emit(new StoveEntry
         {
-            TestId = emitter.CurrentTestId,
+            TestId = testId,
             TraceId = traceId,
             System = "Application",
             Action = $"{logLevel}",
