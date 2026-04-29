@@ -300,22 +300,25 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         [CallerMemberName] string callerName = "")
     {
         var traceId = Guid.NewGuid().ToString("N");
-        var rootSpanId = StoveSpan.NewSpanId();
         var prevTraceId = AsyncTraceId.Value;
         var prevSpanId = AsyncSpanId.Value;
         AsyncTraceId.Value = traceId;
-        AsyncSpanId.Value = rootSpanId;
 
         // Create a real Activity so Activity.Current carries the trace context.
-        // This propagates traceparent to HttpClient → ASP.NET Core → all downstream spans.
+        // Use isRemote: true with a default SpanId so the Activity becomes a root
+        // with our custom TraceId. The Activity's auto-generated SpanId becomes
+        // rootSpanId, ensuring server-side spans (which are children of this Activity)
+        // connect to the same root as our manually emitted spans.
         var activityTraceId = ActivityTraceId.CreateFromString(traceId.AsSpan());
-        var activitySpanId = ActivitySpanId.CreateFromString(rootSpanId.AsSpan());
-        var parentContext = new ActivityContext(activityTraceId, activitySpanId,
-            ActivityTraceFlags.Recorded, isRemote: false);
+        var parentContext = new ActivityContext(activityTraceId, default,
+            ActivityTraceFlags.Recorded, isRemote: true);
 
         using var activity = StoveActivitySource.StartActivity(
             callerName, ActivityKind.Internal, parentContext);
         activity?.AddBaggage(StoveTestIdBaggageKey, CurrentTestId);
+
+        var rootSpanId = activity?.SpanId.ToString() ?? StoveSpan.NewSpanId();
+        AsyncSpanId.Value = rootSpanId;
 
         var start = DateTimeOffset.UtcNow;
         var dsl = new ValidationDsl(this);
