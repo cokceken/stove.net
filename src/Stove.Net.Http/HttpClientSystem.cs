@@ -479,7 +479,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
                || mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void Emit(string action, string? input, string? output, DateTimeOffset start,
+    private void Emit(string action, string? url, string? statusLine, DateTimeOffset start,
         HttpRequestMessage? request = null, HttpResponseMessage? response = null,
         string? requestBody = null, string? responseBody = null)
     {
@@ -487,18 +487,30 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         if (_emitter == null) return;
         var traceId = _emitter.CurrentTraceId;
         var spanId = StoveSpan.NewSpanId();
+
+        // Build rich input: "POST /api/orders\n{...body...}"
+        var inputParts = new List<string> { $"{action} {url}" };
+        if (requestBody != null) inputParts.Add(requestBody);
+        var richInput = string.Join("\n", inputParts);
+
+        // Build rich output: "201 Created\n{...body...}"
+        var outputParts = new List<string>();
+        if (statusLine != null) outputParts.Add(statusLine);
+        if (responseBody != null) outputParts.Add(responseBody);
+        var richOutput = outputParts.Count > 0 ? string.Join("\n", outputParts) : null;
+
         var metadata = new Dictionary<string, string>
         {
             ["http.method"] = action,
-            ["http.url"] = input ?? string.Empty,
+            ["http.url"] = url ?? string.Empty,
             ["scope.type"] = "http_request",
             ["scope.id"] = spanId,
-            ["scope.name"] = $"{action} {input}"
+            ["scope.name"] = $"{action} {url}"
         };
-        if (output != null)
+        if (statusLine != null)
         {
-            var spaceIdx = output.IndexOf(' ');
-            if (spaceIdx > 0) metadata["http.status_code"] = output[..spaceIdx];
+            var spaceIdx = statusLine.IndexOf(' ');
+            if (spaceIdx > 0) metadata["http.status_code"] = statusLine[..spaceIdx];
         }
         if (requestBody != null) metadata["http.request_body"] = requestBody;
         if (responseBody != null) metadata["http.response_body"] = responseBody;
@@ -509,7 +521,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         {
             TestId = _emitter.CurrentTestId, TraceId = traceId,
             System = SystemName, Action = action,
-            Result = EntryResult.Success, Input = input, Output = output,
+            Result = EntryResult.Success, Input = richInput, Output = richOutput,
             Metadata = metadata
         });
 
@@ -518,12 +530,12 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             ["scope.type"] = "http_request",
             ["scope.id"] = spanId,
             ["http.request.method"] = action,
-            ["url.full"] = input ?? string.Empty
+            ["url.full"] = url ?? string.Empty
         };
-        if (output != null)
+        if (statusLine != null)
         {
-            var spaceIdx = output.IndexOf(' ');
-            if (spaceIdx > 0) attributes["http.response.status_code"] = output[..spaceIdx];
+            var spaceIdx = statusLine.IndexOf(' ');
+            if (spaceIdx > 0) attributes["http.response.status_code"] = statusLine[..spaceIdx];
         }
 
         _emitter.EmitSpan(new StoveSpan
@@ -536,17 +548,23 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         });
     }
 
-    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start,
+    private bool EmitFailure(string action, string? url, Exception ex, DateTimeOffset start,
         string? requestBody = null)
     {
         Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
             var traceId = _emitter.CurrentTraceId;
+
+            // Build rich input even on failure
+            var inputParts = new List<string> { $"{action} {url}" };
+            if (requestBody != null) inputParts.Add(requestBody);
+            var richInput = string.Join("\n", inputParts);
+
             var metadata = new Dictionary<string, string>
             {
                 ["http.method"] = action,
-                ["http.url"] = input ?? string.Empty
+                ["http.url"] = url ?? string.Empty
             };
             if (requestBody != null) metadata["http.request_body"] = requestBody;
 
@@ -554,7 +572,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             {
                 TestId = _emitter.CurrentTestId, TraceId = traceId,
                 System = SystemName, Action = action,
-                Result = EntryResult.Failed, Input = input, Error = ex.Message,
+                Result = EntryResult.Failed, Input = richInput, Error = ex.Message,
                 Metadata = metadata
             });
             _emitter.EmitSpan(new StoveSpan
