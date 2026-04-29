@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace Stove.Net.Core.Reporting;
@@ -9,6 +10,8 @@ namespace Stove.Net.Core.Reporting;
 ///
 /// Works with any .NET library that emits Activity spans:
 /// ASP.NET Core, HttpClient, EF Core, Npgsql, MongoDB, StackExchange.Redis, gRPC, etc.
+///
+/// Automatically filters out Stove's own dashboard gRPC traffic.
 /// </summary>
 public sealed class InProcessTraceCollector : ITraceCollector
 {
@@ -27,6 +30,11 @@ public sealed class InProcessTraceCollector : ITraceCollector
     private readonly Func<string, bool> _sourceFilter;
     private ActivityListener? _listener;
     private IStoveEventEmitter? _emitter;
+
+    // Track trace IDs that belong to dashboard gRPC traffic.
+    // Once any span in a trace is identified as dashboard traffic,
+    // all spans sharing that trace ID are suppressed.
+    private readonly ConcurrentDictionary<string, bool> _dashboardTraceIds = new();
 
     /// <summary>
     /// Create a collector that monitors the default set of ActivitySource names.
@@ -76,36 +84,45 @@ public sealed class InProcessTraceCollector : ITraceCollector
     {
         if (_emitter == null) return;
 
-        // Filter out Stove's own dashboard gRPC traffic to avoid a feedback loop
-        if (IsStoveDashboardTraffic(activity)) return;
+        var traceId = activity.TraceId.ToString();
+
+        // If this trace was already flagged as dashboard traffic, skip
+        if (_dashboardTraceIds.ContainsKey(traceId))
+            return;
+
+        // Check if this specific activity is dashboard traffic
+        if (IsDashboardActivity(activity))
+        {
+            _dashboardTraceIds.TryAdd(traceId, true);
+            return;
+        }
 
         var span = MapActivityToSpan(activity);
         _emitter.EmitSpan(span);
     }
 
     /// <summary>
-    /// Returns true if the activity represents Stove's own dashboard gRPC call.
-    /// These are HTTP/gRPC requests to the dashboard endpoint (default localhost:4041)
-    /// that should not be captured as application traces.
+    /// Returns true if this specific activity is a dashboard gRPC/HTTP call.
+    /// Checks URL tags and gRPC service tags for the dashboard endpoint.
     /// </summary>
-    private static bool IsStoveDashboardTraffic(Activity activity)
+    private static bool IsDashboardActivity(Activity activity)
     {
-        // Check url.full or http.url tags for dashboard endpoint
         foreach (var tag in activity.Tags)
         {
-            if (tag.Key is "url.full" or "http.url" or "server.address" &&
+            // HTTP spans targeting the dashboard endpoint
+            if (tag.Key is "url.full" or "http.url" &&
                 tag.Value?.Contains("4041") == true)
                 return true;
 
-            // gRPC method tags contain the service name
+            // gRPC service name
             if (tag.Key == "rpc.service" &&
-                tag.Value?.Contains("DashboardEvent") == true)
+                tag.Value?.Contains("Dashboard", StringComparison.OrdinalIgnoreCase) == true)
+                return true;
+
+            // server.port as separate tag
+            if (tag.Key == "server.port" && tag.Value == "4041")
                 return true;
         }
-
-        // Check parent chain: if any ancestor is dashboard traffic, skip this too
-        if (activity.Parent != null && IsStoveDashboardTraffic(activity.Parent))
-            return true;
 
         return false;
     }
