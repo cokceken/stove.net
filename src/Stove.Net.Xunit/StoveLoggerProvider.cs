@@ -151,6 +151,24 @@ internal sealed class StoveLogger(
             Error = exception?.ToString(),
             Metadata = metadata
         });
+
+        // Also emit as a span so log entries appear in the trace tree
+        if (!string.IsNullOrEmpty(traceId))
+        {
+            var now = DateTimeOffset.UtcNow;
+            emitter.EmitSpan(new StoveSpan
+            {
+                TraceId = traceId,
+                SpanId = StoveSpan.NewSpanId(),
+                ParentSpanId = activity?.SpanId.ToString() ?? string.Empty,
+                OperationName = message.Length > 120 ? message[..120] + "…" : message,
+                ServiceName = $"Log.{shortCategory}",
+                Start = now,
+                End = now,
+                Status = isError ? "ERROR" : "OK",
+                Attributes = metadata
+            });
+        }
     }
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull

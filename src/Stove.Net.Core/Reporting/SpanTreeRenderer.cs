@@ -43,8 +43,18 @@ public static class SpanTreeRenderer
         var opName = node.Span.OperationName;
         var durationMs = node.Span.DurationMs;
 
-        // Use a different icon for server-side/infrastructure spans
-        if (IsInfraSpan(serviceName))
+        // Use a different icon for server-side/infrastructure and log spans
+        if (IsLogSpan(serviceName))
+        {
+            var level = node.Span.Attributes.GetValueOrDefault("log.level", "");
+            icon = level switch
+            {
+                "Warning" => "⚠️",
+                "Error" or "Critical" => "🔴",
+                _ => "📝"
+            };
+        }
+        else if (IsInfraSpan(serviceName))
             icon = "🔍";
 
         if (sb.Length > 0)
@@ -73,4 +83,7 @@ public static class SpanTreeRenderer
                serviceName.StartsWith("MongoDB.", StringComparison.Ordinal) ||
                serviceName.StartsWith("Grpc.", StringComparison.Ordinal);
     }
+
+    private static bool IsLogSpan(string serviceName)
+        => serviceName.StartsWith("Log.", StringComparison.Ordinal);
 }

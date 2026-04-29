@@ -77,8 +77,10 @@ public sealed class ConsoleEventListener : IStoveEventListener
         }
 
         // Server-side captured spans (from ITraceCollector) — show key details
+        // Log spans are already shown via OnEntryRecorded — skip inline display
         if (span.ServiceName is "Validate" or "Http" or "PostgreSql" or "Redis"
-            or "Kafka" or "WireMock" or "MongoDb")
+            or "Kafka" or "WireMock" or "MongoDb"
+            || span.ServiceName.StartsWith("Log.", StringComparison.Ordinal))
             return; // Already shown as StoveEntry — skip duplicate
 
         var detail = BuildSpanDetail(span);
