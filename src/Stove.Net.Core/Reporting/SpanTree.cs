@@ -47,7 +47,7 @@ public sealed class SpanTree
         var root = roots.Count > 0 ? roots.OrderBy(r => r.Start).First() : spans[0];
         var rootNode = BuildNode(root, childMap);
 
-        var failedCount = spans.Count(s => s.Status == "error");
+        var failedCount = spans.Count(s => s.Status == "ERROR");
         return new SpanTree(rootNode, spans.Count, failedCount);
     }
 
@@ -78,7 +78,7 @@ public sealed class SpanNode
     }
 
     public bool HasFailedDescendants =>
-        Span.Status == "error" || Children.Any(c => c.HasFailedDescendants);
+        Span.Status == "ERROR" || Children.Any(c => c.HasFailedDescendants);
 
     public long TotalDurationMs => Span.DurationMs;
 
@@ -87,7 +87,7 @@ public sealed class SpanNode
     /// <summary>Find the deepest failed span (useful for pinpointing root cause).</summary>
     public SpanNode? FindFailurePoint()
     {
-        if (Span.Status == "error" && !Children.Any(c => c.HasFailedDescendants))
+        if (Span.Status == "ERROR" && !Children.Any(c => c.HasFailedDescendants))
             return this;
 
         foreach (var child in Children)
@@ -95,6 +95,6 @@ public sealed class SpanNode
             var fp = child.FindFailurePoint();
             if (fp != null) return fp;
         }
-        return Span.Status == "error" ? this : null;
+        return Span.Status == "ERROR" ? this : null;
     }
 }

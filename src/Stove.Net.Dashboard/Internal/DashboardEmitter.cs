@@ -19,6 +19,9 @@ internal sealed class DashboardEmitter : IAsyncDisposable
 
     private int _consecutiveFailures;
     private bool _disabled;
+    private int _totalQueued;
+    private int _totalSent;
+    private int _totalFailed;
 
     internal DashboardEmitter(DashboardSystemOptions options)
     {
@@ -33,6 +36,7 @@ internal sealed class DashboardEmitter : IAsyncDisposable
     internal void Enqueue(DashboardEvent evt)
     {
         if (_disabled) return;
+        Interlocked.Increment(ref _totalQueued);
         _channel.Writer.TryWrite(evt);
     }
 
@@ -57,6 +61,9 @@ internal sealed class DashboardEmitter : IAsyncDisposable
         {
             /* ignore drain errors on shutdown */
         }
+
+        Console.WriteLine(
+            $"[STOVE] Dashboard emitter stats: {_totalQueued} queued, {_totalSent} sent, {_totalFailed} failed");
 
         await _cts.CancelAsync();
         _cts.Dispose();
@@ -88,10 +95,12 @@ internal sealed class DashboardEmitter : IAsyncDisposable
         {
             var client = GetClient();
             await client.SendEventAsync(evt, deadline: DateTime.UtcNow.AddSeconds(5));
+            Interlocked.Increment(ref _totalSent);
             _consecutiveFailures = 0;
         }
         catch (Exception)
         {
+            Interlocked.Increment(ref _totalFailed);
             _consecutiveFailures++;
             if (_consecutiveFailures >= _options.MaxConsecutiveFailures)
             {

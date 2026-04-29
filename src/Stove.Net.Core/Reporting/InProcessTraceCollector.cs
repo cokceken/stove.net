@@ -148,7 +148,7 @@ public sealed class InProcessTraceCollector : ITraceCollector
             exception = new StoveExceptionInfo(exType, exMsg, exStack.Split('\n'));
         }
 
-        var status = activity.Status == ActivityStatusCode.Error ? "error" : "ok";
+        var status = activity.Status == ActivityStatusCode.Error ? "ERROR" : "OK";
 
         return new StoveSpan
         {

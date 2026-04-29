@@ -71,7 +71,7 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
             Timestamp = Timestamp.FromDateTimeOffset(entry.Timestamp),
             System = entry.System ?? string.Empty,
             Action = entry.Action ?? string.Empty,
-            Result = entry.Result.ToString(),
+            Result = entry.Result == EntryResult.Success ? "PASSED" : "FAILED",
             Input = entry.Input ?? string.Empty,
             Output = entry.Output ?? string.Empty,
             Expected = entry.Expected ?? string.Empty,
@@ -97,7 +97,7 @@ public sealed class DashboardSystem(DashboardSystemOptions options) : IPluggedSy
             TestEnded = new TestEndedEvent
             {
                 TestId = testId,
-                Status = error == null ? "passed" : "failed",
+                Status = error == null ? "PASSED" : "FAILED",
                 DurationMs = (long)duration.TotalMilliseconds,
                 Error = error ?? string.Empty,
                 Timestamp = Timestamp.FromDateTimeOffset(DateTimeOffset.UtcNow)

@@ -38,7 +38,7 @@ public static class SpanTreeRenderer
 
     private static void RenderNode(StringBuilder sb, SpanNode node, string indent, bool isLast)
     {
-        var icon = node.Span.Status == "error" ? "❌" : "✅";
+        var icon = node.Span.Status == "ERROR" ? "❌" : "✅";
         var serviceName = node.Span.ServiceName;
         var opName = node.Span.OperationName;
         var durationMs = node.Span.DurationMs;

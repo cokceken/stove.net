@@ -71,7 +71,7 @@ public sealed class ConsoleEventListener : IStoveEventListener
         // Root spans (Validate calls) are shown as scope markers
         if (string.IsNullOrEmpty(span.ParentSpanId))
         {
-            var icon = span.Status == "ok" ? Pass : Fail;
+            var icon = span.Status == "OK" ? Pass : Fail;
             Console.WriteLine($"{Prefix}   {icon} {span.OperationName} ({span.DurationMs}ms)");
             return;
         }

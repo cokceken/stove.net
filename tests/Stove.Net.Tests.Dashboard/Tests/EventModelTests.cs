@@ -174,7 +174,7 @@ public class EventModelTests
         var rootSpan = listener.SpansRecorded[0];
         Assert.Equal("Validate_emits_root_span_with_caller_name", rootSpan.OperationName);
         Assert.Equal("Validate", rootSpan.ServiceName);
-        Assert.Equal("ok", rootSpan.Status);
+        Assert.Equal("OK", rootSpan.Status);
         Assert.Empty(rootSpan.ParentSpanId);
         Assert.NotEmpty(rootSpan.TraceId);
         Assert.NotEmpty(rootSpan.SpanId);
@@ -204,7 +204,7 @@ public class EventModelTests
 
         Assert.Single(listener.SpansRecorded);
         var span = listener.SpansRecorded[0];
-        Assert.Equal("error", span.Status);
+        Assert.Equal("ERROR", span.Status);
         Assert.NotNull(span.Exception);
         Assert.Equal("InvalidOperationException", span.Exception.Type);
         Assert.Equal("boom", span.Exception.Message);

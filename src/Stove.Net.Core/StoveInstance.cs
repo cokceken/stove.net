@@ -326,7 +326,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
             {
                 TraceId = traceId, SpanId = rootSpanId, ParentSpanId = string.Empty,
                 OperationName = callerName, ServiceName = "Validate",
-                Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
+                Start = start, End = DateTimeOffset.UtcNow, Status = "OK"
             });
         }
         catch (Exception ex)
@@ -336,7 +336,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
             {
                 TraceId = traceId, SpanId = rootSpanId, ParentSpanId = string.Empty,
                 OperationName = callerName, ServiceName = "Validate",
-                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Start = start, End = DateTimeOffset.UtcNow, Status = "ERROR",
                 Exception = new StoveExceptionInfo(
                     ex.GetType().Name, ex.Message, ex.StackTrace?.Split('\n') ?? [])
             });

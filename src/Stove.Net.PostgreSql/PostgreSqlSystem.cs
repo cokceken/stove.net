@@ -263,7 +263,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
             TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
             ParentSpanId = _emitter.CurrentSpanId,
             OperationName = action, ServiceName = SystemName,
-            Start = start, End = DateTimeOffset.UtcNow, Status = "ok"
+            Start = start, End = DateTimeOffset.UtcNow, Status = "OK"
         });
     }
 
@@ -287,7 +287,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
                 TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
                 ParentSpanId = _emitter.CurrentSpanId,
                 OperationName = action, ServiceName = SystemName,
-                Start = start, End = DateTimeOffset.UtcNow, Status = "error",
+                Start = start, End = DateTimeOffset.UtcNow, Status = "ERROR",
                 Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
                     ex.StackTrace?.Split('\n') ?? [])
             });
