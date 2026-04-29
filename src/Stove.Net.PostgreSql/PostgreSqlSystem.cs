@@ -11,7 +11,7 @@ namespace Stove.Net.PostgreSql;
 /// and provides query/execute assertion methods.
 /// </summary>
 public class PostgreSqlSystem(PostgreSqlSystemOptions options)
-    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem, IReportsState
+    : IPluggedSystem, IExposesConfiguration, IStoveReportingSystem, IReportsState, ICollectsLogs
 {
     private const string SystemName = "PostgreSql";
     private PostgreSqlContainer? _container;
@@ -192,6 +192,40 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         await cmd.ExecuteNonQueryAsync();
         NpgsqlConnection.ClearAllPools();
         return this;
+    }
+
+    // --- ICollectsLogs ---
+
+    public async Task<IReadOnlyList<ContainerLogEntry>> GetLogsSinceAsync(DateTimeOffset since)
+    {
+        if (_container == null) return [];
+
+        var (stdout, stderr) = await _container.GetLogsAsync(since.UtcDateTime);
+
+        var entries = new List<ContainerLogEntry>();
+        var containerId = _container.Id[..12];
+
+        if (!string.IsNullOrWhiteSpace(stdout))
+        {
+            foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                entries.Add(new ContainerLogEntry(
+                    DateTimeOffset.UtcNow, SystemName, containerId,
+                    line.Trim(), "stdout"));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            foreach (var line in stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                entries.Add(new ContainerLogEntry(
+                    DateTimeOffset.UtcNow, SystemName, containerId,
+                    line.Trim(), "stderr"));
+            }
+        }
+
+        return entries;
     }
 
     public async ValueTask DisposeAsync()

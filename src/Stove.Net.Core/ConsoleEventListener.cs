@@ -3,12 +3,17 @@ namespace Stove.Net.Core;
 /// <summary>
 /// Prints structured Stove events to the console (stdout).
 /// Enable via StoveBuilder.WithConsoleReporter().
+/// Collects spans per test and renders an ASCII span tree at test end.
 /// </summary>
 public sealed class ConsoleEventListener : IStoveEventListener
 {
     private const string Prefix = "[STOVE]";
     private const string Pass = "✅";
     private const string Fail = "❌";
+
+    // Buffer spans per trace for span tree rendering at test end
+    private readonly Dictionary<string, List<StoveSpan>> _spansByTrace = new();
+    private string _currentTraceId = string.Empty;
 
     public void OnRunStarted(string runId, string appName, IReadOnlyList<string> systems)
     {
@@ -50,6 +55,19 @@ public sealed class ConsoleEventListener : IStoveEventListener
 
     public void OnSpanRecorded(StoveSpan span)
     {
+        // Buffer span for tree rendering at test end
+        if (!string.IsNullOrEmpty(span.TraceId))
+        {
+            if (!_spansByTrace.TryGetValue(span.TraceId, out var spans))
+            {
+                spans = [];
+                _spansByTrace[span.TraceId] = spans;
+            }
+            spans.Add(span);
+            if (string.IsNullOrEmpty(_currentTraceId))
+                _currentTraceId = span.TraceId;
+        }
+
         // Root spans (Validate calls) are shown as scope markers
         if (string.IsNullOrEmpty(span.ParentSpanId))
         {
@@ -78,6 +96,22 @@ public sealed class ConsoleEventListener : IStoveEventListener
 
     public void OnTestEnded(string testId, TimeSpan duration, string? error)
     {
+        // Render span tree if we have spans for this test's trace
+        if (!string.IsNullOrEmpty(_currentTraceId) &&
+            _spansByTrace.TryGetValue(_currentTraceId, out var spans) && spans.Count > 1)
+        {
+            var tree = SpanTree.Build(spans);
+            var ascii = SpanTreeRenderer.RenderAscii(tree);
+            Console.WriteLine($"{Prefix} 🌳 Trace:");
+            foreach (var line in ascii.Split('\n'))
+                Console.WriteLine($"{Prefix}   {line}");
+        }
+
+        // Clean up trace buffer
+        if (!string.IsNullOrEmpty(_currentTraceId))
+            _spansByTrace.Remove(_currentTraceId);
+        _currentTraceId = string.Empty;
+
         if (error != null)
             Console.WriteLine($"{Prefix} {Fail} Test failed in {duration.TotalMilliseconds:F0}ms: {error}");
         else

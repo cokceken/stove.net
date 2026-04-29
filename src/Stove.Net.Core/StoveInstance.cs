@@ -40,10 +40,13 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         return listener;
     }
 
-    private string _currentTestId = string.Empty;
-    private string _currentTraceId = string.Empty;
-    private string _currentSpanId = string.Empty;
-    private DateTimeOffset _testStartedAt;
+    // AsyncLocal ensures correct context in parallel/async test execution
+    // (equivalent to Kotlin's InheritableThreadLocal + CoroutineContext)
+    private static readonly AsyncLocal<string> AsyncTestId = new();
+    private static readonly AsyncLocal<string> AsyncTraceId = new();
+    private static readonly AsyncLocal<string> AsyncSpanId = new();
+    private static readonly AsyncLocal<DateTimeOffset> AsyncTestStartedAt = new();
+
     private int _totalTests;
     private int _passedTests;
     private int _failedTests;
@@ -52,28 +55,29 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     // ---- IStoveEventEmitter ----
 
     /// <inheritdoc/>
-    public string CurrentTestId => _currentTestId;
+    public string CurrentTestId => AsyncTestId.Value ?? string.Empty;
 
     /// <inheritdoc/>
-    public string CurrentTraceId => _currentTraceId;
+    public string CurrentTraceId => AsyncTraceId.Value ?? string.Empty;
 
     /// <inheritdoc/>
-    public string CurrentSpanId => _currentSpanId;
+    public string CurrentSpanId => AsyncSpanId.Value ?? string.Empty;
 
     /// <inheritdoc/>
     public void Emit(StoveEntry entry)
     {
         // Enrich all entries with test ID in metadata for cross-service correlation
         var enriched = entry;
-        if (!string.IsNullOrEmpty(_currentTestId) && entry.Metadata != null)
+        var testId = CurrentTestId;
+        if (!string.IsNullOrEmpty(testId) && entry.Metadata != null)
         {
-            entry.Metadata.TryAdd(StoveTestIdBaggageKey, _currentTestId);
+            entry.Metadata.TryAdd(StoveTestIdBaggageKey, testId);
         }
-        else if (!string.IsNullOrEmpty(_currentTestId))
+        else if (!string.IsNullOrEmpty(testId))
         {
             enriched = entry with
             {
-                Metadata = new Dictionary<string, string> { [StoveTestIdBaggageKey] = _currentTestId }
+                Metadata = new Dictionary<string, string> { [StoveTestIdBaggageKey] = testId }
             };
         }
 
@@ -116,9 +120,9 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     public void NotifyTestStarted(string testId, string testName, string specName = "",
         string[]? testPath = null)
     {
-        _currentTestId = testId;
-        _testStartedAt = DateTimeOffset.UtcNow;
-        _totalTests++;
+        AsyncTestId.Value = testId;
+        AsyncTestStartedAt.Value = DateTimeOffset.UtcNow;
+        Interlocked.Increment(ref _totalTests);
         Activity.Current?.AddBaggage(StoveTestIdHeaderName, testId);
         foreach (var listener in _listeners)
             listener.OnTestStarted(testId, testName, specName, testPath);
@@ -130,9 +134,10 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     /// </summary>
     public void NotifyTestEnded(bool passed, string? error = null)
     {
-        var duration = DateTimeOffset.UtcNow - _testStartedAt;
-        if (passed) _passedTests++;
-        else _failedTests++;
+        var testId = AsyncTestId.Value ?? string.Empty;
+        var duration = DateTimeOffset.UtcNow - AsyncTestStartedAt.Value;
+        if (passed) Interlocked.Increment(ref _passedTests);
+        else Interlocked.Increment(ref _failedTests);
 
         // Auto-collect snapshots from all reporting systems (like Kotlin's Reports interface)
         foreach (var system in _systems.Values.OfType<IReportsState>())
@@ -141,7 +146,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
             {
                 var snapshot = system.Report();
                 if (snapshot != null)
-                    EmitSnapshot(snapshot with { TestId = _currentTestId, TraceId = _currentTraceId });
+                    EmitSnapshot(snapshot with { TestId = testId, TraceId = CurrentTraceId });
             }
             catch (Exception)
             {
@@ -149,9 +154,46 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
             }
         }
 
+        // Collect container logs from all ICollectsLogs systems
+        _ = CollectContainerLogsAsync(testId);
+
         foreach (var listener in _listeners)
-            listener.OnTestEnded(_currentTestId, duration, error);
-        _currentTestId = string.Empty;
+            listener.OnTestEnded(testId, duration, error);
+        AsyncTestId.Value = string.Empty;
+    }
+
+    private async Task CollectContainerLogsAsync(string testId)
+    {
+        var since = AsyncTestStartedAt.Value;
+        foreach (var system in _systems.Values.OfType<ICollectsLogs>())
+        {
+            try
+            {
+                var logs = await system.GetLogsSinceAsync(since);
+                foreach (var log in logs)
+                {
+                    Emit(new StoveEntry
+                    {
+                        TestId = testId,
+                        TraceId = CurrentTraceId,
+                        System = $"Container:{log.Source}",
+                        Action = "Log",
+                        Result = log.Stream == "stderr" ? EntryResult.Failed : EntryResult.Success,
+                        Output = log.Message,
+                        Metadata = new Dictionary<string, string>
+                        {
+                            ["log.stream"] = log.Stream,
+                            ["log.container_id"] = log.ContainerId,
+                            ["log.source"] = log.Source
+                        }
+                    });
+                }
+            }
+            catch (Exception)
+            {
+                // Don't let log collection failures break the test lifecycle
+            }
+        }
     }
 
     // ---- System registration ----
@@ -258,10 +300,10 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     {
         var traceId = Guid.NewGuid().ToString("N");
         var rootSpanId = StoveSpan.NewSpanId();
-        var prevTraceId = _currentTraceId;
-        var prevSpanId = _currentSpanId;
-        _currentTraceId = traceId;
-        _currentSpanId = rootSpanId;
+        var prevTraceId = AsyncTraceId.Value;
+        var prevSpanId = AsyncSpanId.Value;
+        AsyncTraceId.Value = traceId;
+        AsyncSpanId.Value = rootSpanId;
 
         // Create a real Activity so Activity.Current carries the trace context.
         // This propagates traceparent to HttpClient → ASP.NET Core → all downstream spans.
@@ -272,7 +314,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
         using var activity = StoveActivitySource.StartActivity(
             callerName, ActivityKind.Internal, parentContext);
-        activity?.AddBaggage(StoveTestIdBaggageKey, _currentTestId);
+        activity?.AddBaggage(StoveTestIdBaggageKey, CurrentTestId);
 
         var start = DateTimeOffset.UtcNow;
         var dsl = new ValidationDsl(this);
@@ -301,8 +343,8 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         }
         finally
         {
-            _currentTraceId = prevTraceId;
-            _currentSpanId = prevSpanId;
+            AsyncTraceId.Value = prevTraceId;
+            AsyncSpanId.Value = prevSpanId;
         }
     }
 
