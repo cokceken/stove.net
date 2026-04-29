@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using WireMock.Admin.Mappings;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;

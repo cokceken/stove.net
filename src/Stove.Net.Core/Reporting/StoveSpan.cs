@@ -1,4 +1,4 @@
-namespace Stove.Net.Core;
+namespace Stove.Net.Core.Reporting;
 
 /// <summary>
 /// Represents a timed span of execution within a Stove test trace.

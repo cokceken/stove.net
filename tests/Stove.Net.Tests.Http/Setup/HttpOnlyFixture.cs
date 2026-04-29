@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Stove.Net.Core;
+using Stove.Net.Dashboard;
 using Stove.Net.Http;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Xunit;
@@ -17,7 +18,7 @@ public class HttpOnlyFixture : StoveFixture<Program>
 {
     protected override StoveBuilder Configure(StoveBuilder builder)
     {
-        return builder.WithHttpClient();
+        return builder.WithConsoleReporter().WithDashboard().WithHttpClient();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

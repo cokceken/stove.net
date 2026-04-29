@@ -1,4 +1,4 @@
-namespace Stove.Net.Core;
+namespace Stove.Net.Core.Reporting;
 
 /// <summary>
 /// Marker interface for systems that can emit structured operation events.

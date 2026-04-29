@@ -1,3 +1,5 @@
+using Stove.Net.Core.Reporting;
+
 namespace Stove.Net.Core;
 
 /// <summary>

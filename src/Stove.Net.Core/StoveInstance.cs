@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Stove.Net.Core.Exceptions;
+using Stove.Net.Core.Reporting;
 
 namespace Stove.Net.Core;
 

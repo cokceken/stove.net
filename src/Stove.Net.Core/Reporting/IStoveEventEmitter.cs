@@ -1,4 +1,4 @@
-namespace Stove.Net.Core;
+namespace Stove.Net.Core.Reporting;
 
 /// <summary>
 /// Emitter interface exposed to individual systems so they can record actions and spans.

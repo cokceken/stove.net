@@ -1,4 +1,4 @@
-namespace Stove.Net.Core;
+namespace Stove.Net.Core.Reporting;
 
 /// <summary>
 /// Systems implementing this interface can report their current state as a snapshot.

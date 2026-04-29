@@ -3,6 +3,7 @@ using System.Text.Json;
 using Confluent.Kafka;
 using DotNet.Testcontainers.Images;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using Testcontainers.Kafka;
 
 namespace Stove.Net.Kafka;

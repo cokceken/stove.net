@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using Xunit;
 
 namespace Stove.Net.Tests.Dashboard.Tests;

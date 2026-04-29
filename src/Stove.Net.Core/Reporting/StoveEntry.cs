@@ -1,4 +1,4 @@
-namespace Stove.Net.Core;
+namespace Stove.Net.Core.Reporting;
 
 /// <summary>
 /// Represents a single recorded action performed by a Stove system during a test.

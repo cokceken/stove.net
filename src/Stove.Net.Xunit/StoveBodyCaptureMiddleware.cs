@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 
 namespace Stove.Net.Xunit;
 

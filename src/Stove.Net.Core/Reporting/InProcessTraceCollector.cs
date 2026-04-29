@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Stove.Net.Core;
+namespace Stove.Net.Core.Reporting;
 
 /// <summary>
 /// Captures server-side traces from in-process SUTs (e.g., WebApplicationFactory) using
@@ -76,8 +76,38 @@ public sealed class InProcessTraceCollector : ITraceCollector
     {
         if (_emitter == null) return;
 
+        // Filter out Stove's own dashboard gRPC traffic to avoid a feedback loop
+        if (IsStoveDashboardTraffic(activity)) return;
+
         var span = MapActivityToSpan(activity);
         _emitter.EmitSpan(span);
+    }
+
+    /// <summary>
+    /// Returns true if the activity represents Stove's own dashboard gRPC call.
+    /// These are HTTP/gRPC requests to the dashboard endpoint (default localhost:4041)
+    /// that should not be captured as application traces.
+    /// </summary>
+    private static bool IsStoveDashboardTraffic(Activity activity)
+    {
+        // Check url.full or http.url tags for dashboard endpoint
+        foreach (var tag in activity.Tags)
+        {
+            if (tag.Key is "url.full" or "http.url" or "server.address" &&
+                tag.Value?.Contains("4041") == true)
+                return true;
+
+            // gRPC method tags contain the service name
+            if (tag.Key == "rpc.service" &&
+                tag.Value?.Contains("DashboardEvent") == true)
+                return true;
+        }
+
+        // Check parent chain: if any ancestor is dashboard traffic, skip this too
+        if (activity.Parent != null && IsStoveDashboardTraffic(activity.Parent))
+            return true;
+
+        return false;
     }
 
     internal static StoveSpan MapActivityToSpan(Activity activity)

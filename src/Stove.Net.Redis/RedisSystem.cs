@@ -2,6 +2,7 @@ using System.Text.Json;
 using DotNet.Testcontainers.Images;
 using StackExchange.Redis;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using Testcontainers.Redis;
 
 namespace Stove.Net.Redis;

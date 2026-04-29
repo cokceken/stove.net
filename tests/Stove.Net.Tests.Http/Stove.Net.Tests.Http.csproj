@@ -12,6 +12,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Stove.Net.Core\Stove.Net.Core.csproj" />
+        <ProjectReference Include="..\..\src\Stove.Net.Dashboard\Stove.Net.Dashboard.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.Http\Stove.Net.Http.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.Xunit\Stove.Net.Xunit.csproj" />
         <ProjectReference Include="..\Stove.Net.Tests.ExampleApp\Stove.Net.Tests.ExampleApp.csproj" />

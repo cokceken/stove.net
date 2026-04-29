@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 
 namespace Stove.Net.Xunit;
 
@@ -41,21 +42,17 @@ public sealed class StoveLogCaptureOptions
 ///
 /// Injected automatically by StoveFixture into the WebApplicationFactory's logging pipeline.
 /// </summary>
-public sealed class StoveLoggerProvider : ILoggerProvider
+public sealed class StoveLoggerProvider(IStoveEventEmitter emitter, StoveLogCaptureOptions? options = null)
+    : ILoggerProvider
 {
-    private readonly IStoveEventEmitter _emitter;
-    private readonly StoveLogCaptureOptions _options;
-
-    public StoveLoggerProvider(IStoveEventEmitter emitter, StoveLogCaptureOptions? options = null)
-    {
-        _emitter = emitter;
-        _options = options ?? new StoveLogCaptureOptions();
-    }
+    private readonly StoveLogCaptureOptions _options = options ?? new StoveLogCaptureOptions();
 
     public ILogger CreateLogger(string categoryName)
-        => new StoveLogger(categoryName, _emitter, _options);
+        => new StoveLogger(categoryName, emitter, _options);
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+    }
 }
 
 /// <summary>

@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Stove.Net.Core;
+namespace Stove.Net.Core.Reporting;
 
 /// <summary>
 /// Renders a SpanTree as an ASCII tree for console output.

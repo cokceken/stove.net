@@ -3,6 +3,7 @@ using System.Text.Json;
 using DotNet.Testcontainers.Images;
 using MongoDB.Driver;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using Testcontainers.MongoDb;
 
 namespace Stove.Net.MongoDb;

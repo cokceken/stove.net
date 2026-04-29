@@ -2,6 +2,7 @@ using System.Text.Json;
 using DotNet.Testcontainers.Images;
 using Npgsql;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using Testcontainers.PostgreSql;
 
 namespace Stove.Net.PostgreSql;

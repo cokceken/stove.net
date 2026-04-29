@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 
 namespace Stove.Net.Http;
 

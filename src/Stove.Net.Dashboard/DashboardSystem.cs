@@ -1,6 +1,7 @@
 using Google.Protobuf.WellKnownTypes;
 using Stove.Dashboard.V1;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using Stove.Net.Dashboard.Internal;
 
 namespace Stove.Net.Dashboard;

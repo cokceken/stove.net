@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Stove.Net.Core;
+using Stove.Net.Core.Reporting;
 using Xunit;
 
 namespace Stove.Net.Xunit;
@@ -12,6 +14,14 @@ namespace Stove.Net.Xunit;
 /// xUnit fixture that integrates Stove with WebApplicationFactory.
 /// Boots the app-under-test in-process, starts Testcontainers, and wires
 /// container configuration into the app.
+///
+/// By default, the fixture auto-injects:
+/// - Application log capture (via <see cref="StoveLoggerProvider"/>)
+/// - HTTP body capture middleware (via <see cref="StoveBodyCaptureMiddleware"/>)
+/// - Server-side trace capture (via <see cref="InProcessTraceCollector"/>)
+///
+/// Override <see cref="ConfigureLogCapture"/>, <see cref="ConfigureBodyCapture"/>,
+/// or <see cref="ConfigureTraceCapture"/> to customise or disable each feature.
 ///
 /// Usage:
 /// <code>
@@ -73,10 +83,28 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
     /// </summary>
     protected virtual StoveLogCaptureOptions? ConfigureLogCapture() => new();
 
+    /// <summary>
+    /// Override to configure HTTP body capture.
+    /// Return null to disable body capture entirely.
+    /// Default: captures request and response bodies (truncated at 8192 chars).
+    /// </summary>
+    protected virtual StoveBodyCaptureOptions? ConfigureBodyCapture() => new();
+
+    /// <summary>
+    /// Override to disable or customise server-side trace capture.
+    /// Return false to disable trace capture entirely.
+    /// Default: true — captures Activity spans from ASP.NET Core, HttpClient, EF Core, etc.
+    /// </summary>
+    protected virtual bool ConfigureTraceCapture() => true;
+
     public virtual async ValueTask InitializeAsync()
     {
         var builder = StoveBuilder.Create();
         builder = Configure(builder);
+
+        // Auto-wire trace capture unless disabled
+        if (ConfigureTraceCapture())
+            builder.WithTraceCapture();
 
         // Start all systems (containers, etc.) first
         _stove = await builder.RunAsync();
@@ -86,6 +114,9 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
 
         // Resolve log capture options
         var logCaptureOptions = ConfigureLogCapture();
+
+        // Resolve body capture options
+        var bodyCaptureOptions = ConfigureBodyCapture();
 
         // Create the WebApplicationFactory with injected configuration
         _factory = new WebApplicationFactory<TProgram>()
@@ -106,6 +137,16 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
                     });
                 }
 
+                // Auto-inject body capture middleware via IStartupFilter
+                if (bodyCaptureOptions != null)
+                {
+                    webBuilder.ConfigureServices(services =>
+                    {
+                        services.AddSingleton<IStartupFilter>(
+                            new StoveBodyCaptureStartupFilter(_stove, bodyCaptureOptions));
+                    });
+                }
+
                 ConfigureWebHost(webBuilder);
             });
 
@@ -121,5 +162,30 @@ public abstract class StoveFixture<TProgram> : IAsyncLifetime, IStoveFixture
 
         if (_factory != null)
             await _factory.DisposeAsync();
+    }
+}
+
+/// <summary>
+/// IStartupFilter that injects <see cref="StoveBodyCaptureMiddleware"/> into the
+/// ASP.NET Core pipeline automatically. Runs early so it can wrap the response stream
+/// before other middleware processes the request.
+/// </summary>
+internal sealed class StoveBodyCaptureStartupFilter(
+    IStoveEventEmitter emitter,
+    StoveBodyCaptureOptions options) : IStartupFilter
+{
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
+    {
+        return app =>
+        {
+            app.UseStoveBodyCapture(emitter, o =>
+            {
+                o.CaptureRequest = options.CaptureRequest;
+                o.CaptureResponse = options.CaptureResponse;
+                o.MaxBodySize = options.MaxBodySize;
+                o.Redact = options.Redact;
+            });
+            next(app);
+        };
     }
 }
