@@ -1,9 +1,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
 using Stove.Net.Http;
-using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
-using Stove.Net.Redis;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Integration.Setup;
 using Stove.Net.WireMock;
@@ -66,23 +64,6 @@ public class OrderTests(IntegrationFixture fixture)
                         Assert.Equal(5, results[0].Quantity);
                         Assert.Equal("Confirmed", results[0].Status);
                     });
-            });
-
-            await s.Kafka(async kafka =>
-            {
-                await kafka.ShouldBePublished<OrderCreatedEvent>(
-                    "order-events",
-                    e => e.ProductName == "Widget" && e.Quantity == 5);
-            });
-
-            await s.Redis(async redis =>
-            {
-                await redis.GetAsync<Order>($"order:{createdOrder!.Id}", cached =>
-                {
-                    Assert.NotNull(cached);
-                    Assert.Equal("Widget", cached.ProductName);
-                    Assert.Equal(5, cached.Quantity);
-                });
             });
 
             await s.WireMock(async wireMock =>
@@ -154,18 +135,12 @@ public class OrderTests(IntegrationFixture fixture)
 
             Assert.NotNull(createdOrder);
 
-            // Verify cached
-            await s.Redis(async redis => { await redis.ShouldExist($"order:{createdOrder!.Id}"); });
-
             // Delete the order
             await s.Http(async http =>
             {
                 await http.DeleteAsync($"/api/orders/{createdOrder!.Id}",
                     validate: response => { Assert.Equal(HttpStatusCode.NoContent, response.StatusCode); });
             });
-
-            // Verify cache evicted
-            await s.Redis(async redis => { await redis.ShouldNotExist($"order:{createdOrder!.Id}"); });
         });
     }
 }

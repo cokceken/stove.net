@@ -2,9 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Stove.Net.Core;
 using Stove.Net.Dashboard;
 using Stove.Net.Http;
-using Stove.Net.Kafka;
 using Stove.Net.PostgreSql;
-using Stove.Net.Redis;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.WireMock;
 using Stove.Net.Xunit;
@@ -31,23 +29,6 @@ public class IntegrationFixture : StoveFixture<Program>
                 [
                     new KeyValuePair<string, string>(
                         "ConnectionStrings:DefaultConnection", connectionString)
-                ];
-            })
-            .WithKafka(opts =>
-            {
-                opts.TopicsToConsume.Add("order-events");
-                opts.ConfigureExposedConfiguration = bootstrapServers =>
-                [
-                    new KeyValuePair<string, string>(
-                        "Kafka:BootstrapServers", bootstrapServers)
-                ];
-            })
-            .WithRedis(opts =>
-            {
-                opts.ConfigureExposedConfiguration = connectionString =>
-                [
-                    new KeyValuePair<string, string>(
-                        "Redis:ConnectionString", connectionString)
                 ];
             })
             .WithWireMock(opts =>

@@ -14,9 +14,7 @@
         <ProjectReference Include="..\..\src\Stove.Net.Core\Stove.Net.Core.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.Dashboard\Stove.Net.Dashboard.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.Http\Stove.Net.Http.csproj" />
-        <ProjectReference Include="..\..\src\Stove.Net.Kafka\Stove.Net.Kafka.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.PostgreSql\Stove.Net.PostgreSql.csproj" />
-        <ProjectReference Include="..\..\src\Stove.Net.Redis\Stove.Net.Redis.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.WireMock\Stove.Net.WireMock.csproj" />
         <ProjectReference Include="..\..\src\Stove.Net.Xunit\Stove.Net.Xunit.csproj" />
         <ProjectReference Include="..\Stove.Net.Tests.ExampleApp\Stove.Net.Tests.ExampleApp.csproj" />

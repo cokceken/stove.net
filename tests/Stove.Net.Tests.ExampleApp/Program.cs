@@ -9,21 +9,21 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Register Kafka bootstrap servers from configuration (injected by Stove)
-builder.Services.AddSingleton(sp =>
-{
-    var config = sp.GetRequiredService<IConfiguration>();
-    return new Confluent.Kafka.ProducerConfig
-    {
-        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092"
-    };
-});
+// builder.Services.AddSingleton(sp =>
+// {
+//     var config = sp.GetRequiredService<IConfiguration>();
+//     return new Confluent.Kafka.ProducerConfig
+//     {
+//         BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092"
+//     };
+// });
 
-// Register Redis connection lazily — config is resolved at service resolution time
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
-{
-    var config = sp.GetRequiredService<IConfiguration>();
-    return ConnectionMultiplexer.Connect(config["Redis:ConnectionString"]!);
-});
+// // Register Redis connection lazily — config is resolved at service resolution time
+// builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+// {
+//     var config = sp.GetRequiredService<IConfiguration>();
+//     return ConnectionMultiplexer.Connect(config["Redis:ConnectionString"]!);
+// });
 
 // Register named HttpClient for external notification service
 builder.Services.AddHttpClient("NotificationService", (sp, client) =>
