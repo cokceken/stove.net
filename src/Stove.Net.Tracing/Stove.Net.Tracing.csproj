@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Stove.Net.Tracing</RootNamespace>
+        <Description>OpenTelemetry trace collection for Stove.Net — receives OTLP spans from the application under test.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Stove.Net.Core\Stove.Net.Core.csproj" />
+        <ProjectReference Include="..\Stove.Net.Dashboard\Stove.Net.Dashboard.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+        <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
+        <PackageReference Include="Grpc.Tools" Version="2.67.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="proto\opentelemetry\proto\common\v1\common.proto"
+                  ProtoRoot="proto"
+                  GrpcServices="None" />
+        <Protobuf Include="proto\opentelemetry\proto\resource\v1\resource.proto"
+                  ProtoRoot="proto"
+                  GrpcServices="None" />
+        <Protobuf Include="proto\opentelemetry\proto\trace\v1\trace.proto"
+                  ProtoRoot="proto"
+                  GrpcServices="None" />
+        <Protobuf Include="proto\opentelemetry\proto\collector\trace\v1\trace_service.proto"
+                  ProtoRoot="proto"
+                  GrpcServices="Server" />
+    </ItemGroup>
+
+</Project>

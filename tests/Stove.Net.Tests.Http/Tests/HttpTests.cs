@@ -2,7 +2,6 @@ using System.Net;
 using Stove.Net.Http;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Http.Setup;
-using Stove.Net.Xunit;
 using Xunit;
 
 namespace Stove.Net.Tests.Http.Tests;
@@ -10,15 +9,15 @@ namespace Stove.Net.Tests.Http.Tests;
 /// <summary>
 /// Smoke tests for the Stove.Net.Http system.
 /// Uses an in-memory database — no containers required.
-/// Extends StoveTestBase so each test emits lifecycle events to the dashboard.
+/// Framework-agnostic — uses standard xUnit patterns, not Stove-specific base classes.
 /// </summary>
 public class HttpTests(HttpOnlyFixture fixture)
-    : StoveTestBase<HttpOnlyFixture>(fixture), IClassFixture<HttpOnlyFixture>
+    : IClassFixture<HttpOnlyFixture>
 {
     [Fact]
     public async Task Should_get_health_endpoint()
     {
-        await Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             await s.Http(async http =>
             {
@@ -34,9 +33,8 @@ public class HttpTests(HttpOnlyFixture fixture)
     [Fact]
     public async Task Should_post_and_retrieve_resource()
     {
-        await Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
-            // Extract the created order via the validate callback
             Order? created = null;
 
             await s.Http(async http =>
@@ -67,7 +65,7 @@ public class HttpTests(HttpOnlyFixture fixture)
     [Fact]
     public async Task Should_return_404_for_missing_resource()
     {
-        await Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             await s.Http(async http =>
             {

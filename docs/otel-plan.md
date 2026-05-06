@@ -230,25 +230,29 @@ Test starts
 
 This is exactly how Kotlin Stove does it, and it's cleaner than the current AsyncLocal + Baggage + Header approach.
 
-### Implementation Phases
+### Implementation Status
 
-**Phase 1: OTLP Receiver**
-- Create `Stove.Net.Tracing` project (or add to Core).
-- Implement `OtlpSpanReceiver` (gRPC server receiving `ExportTraceServiceRequest`).
-- Implement `StoveTraceCollector` (span storage + correlation).
-- Add `TracingSystem` as an `IPluggedSystem`.
+**Phase 1: OTLP Receiver ✅ DONE**
+- Created `Stove.Net.Tracing` project with gRPC-based OTLP receiver.
+- `OtlpReceiver`: Kestrel + gRPC server implementing `TraceService.Export`. Receives `ExportTraceServiceRequest`, parses `ResourceSpans → ScopeSpans → Span`, extracts service name, attributes, exceptions (from OTLP events), status. Filters internal gRPC spans to prevent feedback loops. Uses port 0 (auto-assign) by default.
+- `StoveTraceCollector`: Thread-safe `ConcurrentDictionary<string, ConcurrentBag<StoveSpan>>` storage with traceId→testId correlation. Two-phase polling (`WaitForSpansAsync`): 50ms intervals until first spans arrive, then 200ms straggler wait. Supports fallback trace resolution by `stove.test.id` attribute.
+- `TracingSystem`: `IPluggedSystem` + `IExposesConfiguration` + `IStoveReportingSystem`. Exposes `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` as configuration. Assertion helpers: `ShouldContainSpan`, `ShouldNotHaveFailedSpans`, `RenderTraceTree`.
+- `TracingSystemOptions`: Port, timeouts, MaxSpansPerTrace, custom config mapping.
+- `StoveTracingExtensions`: `StoveBuilder.WithOtlpTracing()` + `ValidationDsl.Tracing()`.
+- Proto files: Official OpenTelemetry proto v1.5.0, compiled with Grpc.Tools.
 
-**Phase 2: App Integration**
-- Add `WithTracing()` to `StoveBuilder`.
-- Auto-set `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable.
-- Test with a sample app that has OTel SDK configured.
+**Phase 2: App Integration ✅ DONE**
+- ExampleApp configured with OpenTelemetry SDK (AspNetCore + HttpClient instrumentation + OTLP exporter).
+- Reads `OTEL_EXPORTER_OTLP_ENDPOINT` from `IConfiguration` (injected by Stove's `TracingSystem.Configuration()`).
+- IntegrationFixture and HttpOnlyFixture updated: `WithOtlpTracing()` replaces `WithTraceCapture()`.
+- Configuration flows through `StoveInstance.CollectConfiguration()` → `IConfiguration.AddInMemoryCollection()` → ExampleApp startup.
 
-**Phase 3: Log Collection via OTel**
+**Phase 3: Log Collection via OTel** (future)
 - Extend OTLP receiver to handle `ExportLogsServiceRequest`.
 - Convert OTLP log records to `StoveEntry` events.
 - Optionally replace `StoveLoggerProvider` with OTel log export.
 
-**Phase 4: Remove In-Process Capture**
+**Phase 4: Remove In-Process Capture** (future)
 - Remove `StoveLoggerProvider` (replaced by OTel logs).
 - Remove `InProcessTraceCollector` (replaced by OTLP receiver).
 - Remove `StoveBodyCaptureMiddleware` (body capture moves to `HttpClientSystem` client-side).

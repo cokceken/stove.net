@@ -18,7 +18,16 @@ public static class StoveDashboardExtensions
     {
         var options = new DashboardSystemOptions();
         configure?.Invoke(options);
+        return builder.WithDashboard(options);
+    }
 
+    /// <summary>
+    /// Enable streaming of test events to the Stove dashboard UI with pre-built options.
+    /// </summary>
+    public static StoveBuilder WithDashboard(
+        this StoveBuilder builder,
+        DashboardSystemOptions options)
+    {
         var system = new DashboardSystem(options);
         builder.WithSystem(system);
         builder.WithListener(system);

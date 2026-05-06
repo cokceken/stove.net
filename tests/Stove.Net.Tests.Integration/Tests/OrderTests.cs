@@ -5,32 +5,29 @@ using Stove.Net.PostgreSql;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Integration.Setup;
 using Stove.Net.WireMock;
-using Stove.Net.Xunit;
 using Xunit;
 
 namespace Stove.Net.Tests.Integration.Tests;
 
 /// <summary>
-/// Integration tests combining HTTP + PostgreSQL + Kafka + Redis systems.
-/// Validates end-to-end flows through a real API, database, message broker, and cache.
+/// Integration tests combining HTTP + PostgreSQL + WireMock systems.
+/// Validates end-to-end flows through a real API, database, and mock server.
+/// Framework-agnostic — uses standard xUnit patterns, not Stove-specific base classes.
 /// </summary>
 public class OrderTests(IntegrationFixture fixture)
-    : StoveTestBase<IntegrationFixture>(fixture), IClassFixture<IntegrationFixture>, IAsyncLifetime
+    : IClassFixture<IntegrationFixture>, IAsyncLifetime
 {
-    private readonly IntegrationFixture _fixture = fixture;
-
-    public override async ValueTask InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        await base.InitializeAsync();
-        await _fixture.Stove.CleanupAsync();
+        await fixture.Stove.CleanupAsync();
     }
 
-    public override async ValueTask DisposeAsync() => await base.DisposeAsync();
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {
-        await _fixture.Stove.Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -76,7 +73,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_return_404_for_nonexistent_order()
     {
-        await _fixture.Stove.Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             await s.Http(async http =>
             {
@@ -89,7 +86,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_get_order_by_id()
     {
-        await _fixture.Stove.Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -122,7 +119,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_remove_cached_order_on_delete()
     {
-        await _fixture.Stove.Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -135,7 +132,6 @@ public class OrderTests(IntegrationFixture fixture)
 
             Assert.NotNull(createdOrder);
 
-            // Delete the order
             await s.Http(async http =>
             {
                 await http.DeleteAsync($"/api/orders/{createdOrder!.Id}",

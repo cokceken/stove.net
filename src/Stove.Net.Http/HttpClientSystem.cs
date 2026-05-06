@@ -428,13 +428,36 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         return sb.ToString();
     }
 
-    private static void ApplyHeaders(HttpRequestMessage request, Dictionary<string, string>? headers, string? token = null)
+    private void ApplyHeaders(HttpRequestMessage request, Dictionary<string, string>? headers, string? token = null)
     {
         if (token != null)
             request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
-        if (headers == null) return;
-        foreach (var (key, value) in headers)
-            request.Headers.TryAddWithoutValidation(key, value);
+        if (headers != null)
+        {
+            foreach (var (key, value) in headers)
+                request.Headers.TryAddWithoutValidation(key, value);
+        }
+
+        InjectTraceContext(request);
+    }
+
+    /// <summary>
+    /// Inject W3C traceparent and X-Stove-Test-Id headers so the app creates
+    /// child spans under Stove's trace context. Matches Kotlin Stove's injectTraceHeaders().
+    /// </summary>
+    private void InjectTraceContext(HttpRequestMessage request)
+    {
+        if (_emitter == null) return;
+        var traceId = _emitter.CurrentTraceId;
+        var spanId = _emitter.CurrentSpanId;
+        if (string.IsNullOrEmpty(traceId)) return;
+
+        var parentId = !string.IsNullOrEmpty(spanId) ? spanId : "0000000000000000";
+        request.Headers.TryAddWithoutValidation("traceparent", $"00-{traceId}-{parentId}-01");
+
+        var testId = _emitter.CurrentTestId;
+        if (!string.IsNullOrEmpty(testId))
+            request.Headers.TryAddWithoutValidation("X-Stove-Test-Id", testId);
     }
 
     public StoveSnapshot Report() => new()
@@ -485,8 +508,6 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
     {
         Interlocked.Increment(ref _requestCount);
         if (_emitter == null) return;
-        var traceId = _emitter.CurrentTraceId;
-        var spanId = StoveSpan.NewSpanId();
 
         // Build rich input: "POST /api/orders\n{...body...}"
         var inputParts = new List<string> { $"{action} {url}" };
@@ -503,9 +524,6 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         {
             ["http.method"] = action,
             ["http.url"] = url ?? string.Empty,
-            ["scope.type"] = "http_request",
-            ["scope.id"] = spanId,
-            ["scope.name"] = $"{action} {url}"
         };
         if (statusLine != null)
         {
@@ -517,35 +535,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         if (request != null) metadata["http.request_headers"] = SerializeHeaders(request.Headers, request.Content?.Headers);
         if (response != null) metadata["http.response_headers"] = SerializeHeaders(response.Headers, response.Content?.Headers);
 
-        _emitter.Emit(new StoveEntry
-        {
-            TestId = _emitter.CurrentTestId, TraceId = traceId,
-            System = SystemName, Action = action,
-            Result = EntryResult.Success, Input = richInput, Output = richOutput,
-            Metadata = metadata
-        });
-
-        var attributes = new Dictionary<string, string>
-        {
-            ["scope.type"] = "http_request",
-            ["scope.id"] = spanId,
-            ["http.request.method"] = action,
-            ["url.full"] = url ?? string.Empty
-        };
-        if (statusLine != null)
-        {
-            var spaceIdx = statusLine.IndexOf(' ');
-            if (spaceIdx > 0) attributes["http.response.status_code"] = statusLine[..spaceIdx];
-        }
-
-        _emitter.EmitSpan(new StoveSpan
-        {
-            TraceId = traceId, SpanId = spanId,
-            ParentSpanId = _emitter.CurrentSpanId,
-            OperationName = action, ServiceName = SystemName,
-            Start = start, End = DateTimeOffset.UtcNow, Status = "OK",
-            Attributes = attributes
-        });
+        _emitter.ReportSuccess(SystemName, action, input: richInput, output: richOutput, metadata: metadata);
     }
 
     private bool EmitFailure(string action, string? url, Exception ex, DateTimeOffset start,
@@ -554,8 +544,6 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
-            var traceId = _emitter.CurrentTraceId;
-
             // Build rich input even on failure
             var inputParts = new List<string> { $"{action} {url}" };
             if (requestBody != null) inputParts.Add(requestBody);
@@ -568,22 +556,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             };
             if (requestBody != null) metadata["http.request_body"] = requestBody;
 
-            _emitter.Emit(new StoveEntry
-            {
-                TestId = _emitter.CurrentTestId, TraceId = traceId,
-                System = SystemName, Action = action,
-                Result = EntryResult.Failed, Input = richInput, Error = ex.Message,
-                Metadata = metadata
-            });
-            _emitter.EmitSpan(new StoveSpan
-            {
-                TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
-                ParentSpanId = _emitter.CurrentSpanId,
-                OperationName = action, ServiceName = SystemName,
-                Start = start, End = DateTimeOffset.UtcNow, Status = "ERROR",
-                Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
-                    ex.StackTrace?.Split('\n') ?? [])
-            });
+            _emitter.ReportFailure(SystemName, action, ex, input: richInput, metadata: metadata);
         }
         return false;
     }

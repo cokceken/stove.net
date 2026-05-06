@@ -38,45 +38,6 @@ public sealed class StoveBuilder
         return this;
     }
 
-    /// <summary>
-    /// Enable the built-in console reporter. Prints a structured line per DSL action.
-    /// </summary>
-    public StoveBuilder WithConsoleReporter()
-    {
-        Instance.AddListener(new ConsoleEventListener());
-        return this;
-    }
-
-    /// <summary>
-    /// Enable server-side trace capture using the default in-process collector.
-    /// Captures Activity spans from ASP.NET Core, HttpClient, EF Core, Npgsql, MongoDB, Redis.
-    /// </summary>
-    public StoveBuilder WithTraceCapture()
-    {
-        Instance.AddTraceCollector(new InProcessTraceCollector());
-        return this;
-    }
-
-    /// <summary>
-    /// Enable server-side trace capture with a custom collector.
-    /// Use InProcessTraceCollector for WebApplicationFactory, or a future OtlpTraceCollector for Docker.
-    /// </summary>
-    public StoveBuilder WithTraceCapture(ITraceCollector collector)
-    {
-        Instance.AddTraceCollector(collector);
-        return this;
-    }
-
-    /// <summary>
-    /// Enable server-side trace capture with a custom source filter.
-    /// The predicate receives the ActivitySource.Name and returns true to capture.
-    /// </summary>
-    public StoveBuilder WithTraceCapture(Func<string, bool> sourceFilter)
-    {
-        Instance.AddTraceCollector(new InProcessTraceCollector(sourceFilter));
-        return this;
-    }
-
     /// <summary>Start all registered systems and return the configured Stove instance.</summary>
     public async Task<StoveInstance> RunAsync()
     {

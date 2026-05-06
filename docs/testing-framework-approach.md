@@ -67,8 +67,7 @@ var stove = await new StoveBuilder()
     {
         // Configure WebApplicationFactory or any hosting approach
     })
-    .WithConsoleReporter()
-    .WithDashboard()
+    .WithOtlpTracing()
     .WithHttpClient()
     .WithPostgreSql(opts => { ... })
     .WithKafka(opts => { ... })

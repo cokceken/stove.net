@@ -248,23 +248,9 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
     {
         Interlocked.Increment(ref _operationCount);
         if (_emitter == null) return;
-        var traceId = _emitter.CurrentTraceId;
         var metadata = new Dictionary<string, string> { ["db.system"] = "postgresql" };
         if (input != null) metadata["db.statement"] = input.Length > 200 ? input[..200] + "…" : input;
-        _emitter.Emit(new StoveEntry
-        {
-            TestId = _emitter.CurrentTestId, TraceId = traceId,
-            System = SystemName, Action = action,
-            Result = EntryResult.Success, Input = input, Output = output,
-            Metadata = metadata
-        });
-        _emitter.EmitSpan(new StoveSpan
-        {
-            TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
-            ParentSpanId = _emitter.CurrentSpanId,
-            OperationName = action, ServiceName = SystemName,
-            Start = start, End = DateTimeOffset.UtcNow, Status = "OK"
-        });
+        _emitter.ReportSuccess(SystemName, action, input: input, output: output, metadata: metadata);
     }
 
     private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
@@ -272,25 +258,9 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Interlocked.Increment(ref _failedCount);
         if (_emitter != null)
         {
-            var traceId = _emitter.CurrentTraceId;
             var metadata = new Dictionary<string, string> { ["db.system"] = "postgresql" };
             if (input != null) metadata["db.statement"] = input.Length > 200 ? input[..200] + "…" : input;
-            _emitter.Emit(new StoveEntry
-            {
-                TestId = _emitter.CurrentTestId, TraceId = traceId,
-                System = SystemName, Action = action,
-                Result = EntryResult.Failed, Input = input, Error = ex.Message,
-                Metadata = metadata
-            });
-            _emitter.EmitSpan(new StoveSpan
-            {
-                TraceId = traceId, SpanId = StoveSpan.NewSpanId(),
-                ParentSpanId = _emitter.CurrentSpanId,
-                OperationName = action, ServiceName = SystemName,
-                Start = start, End = DateTimeOffset.UtcNow, Status = "ERROR",
-                Exception = new StoveExceptionInfo(ex.GetType().Name, ex.Message,
-                    ex.StackTrace?.Split('\n') ?? [])
-            });
+            _emitter.ReportFailure(SystemName, action, ex, input: input, metadata: metadata);
         }
         return false;
     }

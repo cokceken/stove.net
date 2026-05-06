@@ -16,7 +16,6 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 {
     private readonly Dictionary<SystemKey, IPluggedSystem> _systems = new();
     private readonly List<IStoveEventListener> _listeners = [];
-    private readonly List<ITraceCollector> _traceCollectors = [];
     private readonly string _runId = Guid.NewGuid().ToString("N");
 
     private static readonly ActivitySource StoveActivitySource = new("Stove.Net");
@@ -26,7 +25,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     public const string StoveTestIdBaggageKey = "stove.test.id";
 
     // Ensure the Stove ActivitySource always creates activities (for trace propagation)
-    // even when no InProcessTraceCollector is configured.
+    // even when no trace collectors are configured.
     private static readonly ActivityListener StoveInternalListener = CreateStoveListener();
 
     private static ActivityListener CreateStoveListener()
@@ -106,11 +105,6 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     /// Register an event listener. Listeners receive all lifecycle and operation events.
     /// </summary>
     public void AddListener(IStoveEventListener listener) => _listeners.Add(listener);
-
-    /// <summary>
-    /// Register a trace collector. Collectors capture server-side spans and emit them as StoveSpan.
-    /// </summary>
-    public void AddTraceCollector(ITraceCollector collector) => _traceCollectors.Add(collector);
 
     // ---- Test lifecycle ----
 
@@ -260,10 +254,6 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     {
         _runStartedAt = DateTimeOffset.UtcNow;
 
-        // Start trace collectors before systems so we capture system startup activity too
-        foreach (var collector in _traceCollectors)
-            collector.Start(this);
-
         foreach (var system in _systems.Values)
             await system.RunAsync();
 
@@ -299,10 +289,18 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         Func<ValidationDsl, Task> validation,
         [CallerMemberName] string callerName = "")
     {
+        var testId = Guid.NewGuid().ToString("N")[..16];
         var traceId = Guid.NewGuid().ToString("N");
         var prevTraceId = AsyncTraceId.Value;
         var prevSpanId = AsyncSpanId.Value;
         AsyncTraceId.Value = traceId;
+
+        // Notify tracing systems about the new trace for span correlation
+        foreach (var aware in GetSystems<ITraceContextAware>())
+            aware.OnTraceStarted(traceId, testId);
+
+        // Fire test lifecycle so listeners (Dashboard, etc.) know a test is running
+        NotifyTestStarted(testId, callerName);
 
         // Create a real Activity so Activity.Current carries the trace context.
         // Use isRemote: true with a default SpanId so the Activity becomes a root
@@ -331,6 +329,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
                 OperationName = callerName, ServiceName = "Validate",
                 Start = start, End = DateTimeOffset.UtcNow, Status = "OK"
             });
+            NotifyTestEnded(passed: true);
         }
         catch (Exception ex)
         {
@@ -343,6 +342,7 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
                 Exception = new StoveExceptionInfo(
                     ex.GetType().Name, ex.Message, ex.StackTrace?.Split('\n') ?? [])
             });
+            NotifyTestEnded(passed: false, error: ex.Message);
             throw;
         }
         finally
@@ -354,10 +354,6 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
     public async ValueTask DisposeAsync()
     {
-        // Stop trace collectors before tearing down systems
-        foreach (var collector in _traceCollectors)
-            await collector.DisposeAsync();
-
         var duration = DateTimeOffset.UtcNow - _runStartedAt;
         foreach (var listener in _listeners)
             listener.OnRunEnded(_totalTests, _passedTests, _failedTests, duration);
