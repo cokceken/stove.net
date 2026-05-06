@@ -19,8 +19,8 @@ builder.Services.AddOpenTelemetry()
         tracing
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
-            .AddSource("Npgsql")
             .AddOtlpExporter();
+        Npgsql.TracerProviderBuilderExtensions.AddNpgsql(tracing);
     });
 
 // Override the OTLP exporter endpoint at DI time (after WebApplicationFactory's
