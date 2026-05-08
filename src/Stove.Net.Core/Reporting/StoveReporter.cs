@@ -10,6 +10,18 @@ namespace Stove.Net.Core.Reporting;
 public sealed class StoveReporter : IStoveEventListener
 {
     private readonly ConcurrentDictionary<string, TestContext> _contexts = new();
+    private volatile string? _lastRenderedReport;
+
+    /// <summary>
+    /// Consume the last rendered failure report (returns it and clears).
+    /// Used by StoveInstance.Validate() to enrich the thrown exception.
+    /// </summary>
+    internal string? ConsumeLastReport()
+    {
+        var report = _lastRenderedReport;
+        _lastRenderedReport = null;
+        return report;
+    }
 
     /// <summary>
     /// Log sources (e.g., Testcontainers) set by StoveInstance during initialization.
@@ -104,6 +116,10 @@ public sealed class StoveReporter : IStoveEventListener
                 };
 
                 var rendered = ConsoleReportRenderer.Render(report);
+
+                // Store for exception enrichment in Validate()
+                _lastRenderedReport = rendered;
+
                 var writer = OutputWriter ?? Console.Error.WriteLine;
                 writer(rendered);
             }

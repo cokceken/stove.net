@@ -4,4 +4,9 @@
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003ANpgsqlCommand_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003FLibrary_003FApplication_0020Support_003FJetBrains_003FRider2026_002E1_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003F3e131d78e3964c058e2e57a2ff0ec560168e00_003F7e_003Ffbd30050_003FNpgsqlCommand_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003ANpgsqlConnection_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003FLibrary_003FApplication_0020Support_003FJetBrains_003FRider2026_002E1_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003F3e131d78e3964c058e2e57a2ff0ec560168e00_003F35_003F26741c58_003FNpgsqlConnection_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/TestLinker/NamingAffixes/@EntryValue">Test,Spec,Tests,Specs,Tests.Example</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=32946f39_002D6f05_002D4972_002D97c4_002De972b4dd9b41/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="OrderTests" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;TestAncestor&gt;
+    &lt;TestId&gt;xUnit::C5000000-0000-0000-0000-000000000001::net10.0::Stove.Net.Tests.Integration.Tests.OrderTests&lt;/TestId&gt;
+  &lt;/TestAncestor&gt;
+&lt;/SessionState&gt;</s:String>
 	</wpf:ResourceDictionary>

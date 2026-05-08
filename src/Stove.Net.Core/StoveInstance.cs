@@ -380,6 +380,13 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
                     ex.GetType().Name, ex.Message, ex.StackTrace?.Split('\n') ?? [])
             });
             NotifyTestEnded(passed: false, error: ex.Message);
+
+            // Enrich the exception with the Stove execution report so it's
+            // always visible in test output regardless of how the runner handles stderr
+            var report = Reporter?.ConsumeLastReport();
+            if (!string.IsNullOrEmpty(report))
+                throw new StoveTestFailureException(ex, report);
+
             throw;
         }
         finally

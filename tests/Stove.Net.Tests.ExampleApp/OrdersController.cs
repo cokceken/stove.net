@@ -28,12 +28,8 @@ public class OrdersController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)
     {
-
-
         var order = await _db.Orders.FindAsync(id);
         if (order is null) return NotFound();
-
-       
 
         return Ok(order);
     }
