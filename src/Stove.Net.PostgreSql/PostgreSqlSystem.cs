@@ -82,7 +82,6 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Action<List<T>> validate,
         object? parameters = null)
     {
-        var start = DateTimeOffset.UtcNow;
         try
         {
             await using var conn = new NpgsqlConnection(ConnectionString);
@@ -95,11 +94,12 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
             while (await reader.ReadAsync()) results.Add(mapper(reader));
 
             validate(results);
-            Emit("ShouldQuery", sql, $"{results.Count} row(s)", start);
+            Emit("ShouldQuery", sql, $"{results.Count} row(s)");
         }
-        catch (Exception ex) when (EmitFailure("ShouldQuery", sql, ex, start))
+        catch (Exception ex)
         {
-            // EmitFailure always returns false — exception re-thrown
+            EmitFailure("ShouldQuery", sql, ex);
+            throw;
         }
 
         return this;
@@ -111,7 +111,6 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Action<int>? validateAffectedRows = null,
         object? parameters = null)
     {
-        var start = DateTimeOffset.UtcNow;
         try
         {
             await using var conn = new NpgsqlConnection(ConnectionString);
@@ -121,10 +120,12 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
 
             var affected = await cmd.ExecuteNonQueryAsync();
             validateAffectedRows?.Invoke(affected);
-            Emit("ShouldExecute", sql, $"{affected} row(s) affected", start);
+            Emit("ShouldExecute", sql, $"{affected} row(s) affected");
         }
-        catch (Exception ex) when (EmitFailure("ShouldExecute", sql, ex, start))
+        catch (Exception ex)
         {
+            EmitFailure("ShouldExecute", sql, ex);
+            throw;
         }
 
         return this;
@@ -136,7 +137,6 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Action<T?> validate,
         object? parameters = null)
     {
-        var start = DateTimeOffset.UtcNow;
         try
         {
             await using var conn = new NpgsqlConnection(ConnectionString);
@@ -147,10 +147,12 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
             var result = await cmd.ExecuteScalarAsync();
             var typed = result is T t ? t : default;
             validate(typed);
-            Emit("ShouldQueryScalar", sql, typed?.ToString(), start);
+            Emit("ShouldQueryScalar", sql, typed?.ToString());
         }
-        catch (Exception ex) when (EmitFailure("ShouldQueryScalar", sql, ex, start))
+        catch (Exception ex)
         {
+            EmitFailure("ShouldQueryScalar", sql, ex);
+            throw;
         }
 
         return this;
@@ -244,7 +246,7 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         Summary = $"{_operationCount} operation(s), {_failedCount} failed"
     };
 
-    private void Emit(string action, string? input, string? output, DateTimeOffset start)
+    private void Emit(string action, string? input, string? output)
     {
         Interlocked.Increment(ref _operationCount);
         if (_emitter == null) return;
@@ -253,15 +255,12 @@ public class PostgreSqlSystem(PostgreSqlSystemOptions options)
         _emitter.ReportSuccess(SystemName, action, input: input, output: output, metadata: metadata);
     }
 
-    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
+    private void EmitFailure(string action, string? input, Exception ex)
     {
         Interlocked.Increment(ref _failedCount);
-        if (_emitter != null)
-        {
-            var metadata = new Dictionary<string, string> { ["db.system"] = "postgresql" };
-            if (input != null) metadata["db.statement"] = input.Length > 200 ? input[..200] + "…" : input;
-            _emitter.ReportFailure(SystemName, action, ex, input: input, metadata: metadata);
-        }
-        return false;
+        if (_emitter == null) return;
+        var metadata = new Dictionary<string, string> { ["db.system"] = "postgresql" };
+        if (input != null) metadata["db.statement"] = input.Length > 200 ? input[..200] + "…" : input;
+        _emitter.ReportFailure(SystemName, action, ex, input: input, metadata: metadata);
     }
 }

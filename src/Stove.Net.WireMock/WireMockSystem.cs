@@ -72,7 +72,8 @@ public class WireMockSystem(WireMockSystemOptions options)
 
     // --- Fault / Delay Stubs ---
 
-    public WireMockSystem StubWithDelay(string path, string httpMethod, int statusCode, TimeSpan delay, string? body = null)
+    public WireMockSystem StubWithDelay(string path, string httpMethod, int statusCode, TimeSpan delay,
+        string? body = null)
     {
         Server.WithMapping(new MappingModel
         {
@@ -110,20 +111,14 @@ public class WireMockSystem(WireMockSystemOptions options)
 
     // --- Assertions ---
 
-    /// <summary>
-    /// Core assertion: validates count and optionally inspects the request body of the last matching request.
-    /// All other ShouldHaveReceived overloads delegate to this method.
-    /// </summary>
-    public WireMockSystem ShouldHaveReceivedBody(string path, string? httpMethod, Action<string?>? validate,
-        int expectedCount = 1)
+    public WireMockSystem ShouldHaveReceived(string path, string httpMethod, int expectedCount,
+        Action<string?>? validate = null)
     {
-        var start = DateTimeOffset.UtcNow;
         try
         {
             var matching = Server.LogEntries
                 .Where(e => string.Equals(e.RequestMessage?.Path, path, StringComparison.OrdinalIgnoreCase) &&
-                            (httpMethod == null ||
-                             string.Equals(e.RequestMessage?.Method, httpMethod, StringComparison.OrdinalIgnoreCase)))
+                            string.Equals(e.RequestMessage?.Method, httpMethod, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (matching.Count != expectedCount)
@@ -139,25 +134,22 @@ public class WireMockSystem(WireMockSystemOptions options)
                 validate(last?.RequestMessage?.Body);
             }
 
-            Emit("ShouldHaveReceived", $"{httpMethod} {path}", $"{matching.Count} request(s)", start);
+            Emit("ShouldHaveReceived", $"{httpMethod} {path}", $"{matching.Count} request(s)");
         }
-        catch (Exception ex) when (EmitFailure("ShouldHaveReceived", $"{httpMethod} {path}", ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("ShouldHaveReceived", $"{httpMethod} {path}", ex);
+            throw;
+        }
 
         return this;
     }
 
-    public WireMockSystem ShouldHaveReceived(string path, string httpMethod, int expectedCount,
-        Action<string?>? validate = null) =>
-        ShouldHaveReceivedBody(path, httpMethod, validate, expectedCount);
+    public WireMockSystem ShouldHaveReceived(string path, string httpMethod, Action<string?>? validate = null) =>
+        ShouldHaveReceived(path, httpMethod, 1, validate);
 
-    public WireMockSystem ShouldHaveReceived(string path, string httpMethod, Action<string?> validate) =>
-        ShouldHaveReceivedBody(path, httpMethod, validate, 1);
-
-    public WireMockSystem ShouldHaveReceived(string path, string httpMethod) =>
-        ShouldHaveReceivedBody(path, httpMethod, null, 1);
-
-    public WireMockSystem ShouldNotHaveReceived(string path, string httpMethod) =>
-        ShouldHaveReceivedBody(path, httpMethod, null, 0);
+    public WireMockSystem ShouldNotHaveReceived(string path, string httpMethod, Action<string?>? validate = null) =>
+        ShouldHaveReceived(path, httpMethod, 0, validate);
 
     private string FormatReceivedSummary()
     {
@@ -194,7 +186,7 @@ public class WireMockSystem(WireMockSystemOptions options)
         };
     }
 
-    private void Emit(string action, string? input, string? output, DateTimeOffset start)
+    private void Emit(string action, string? input, string? output)
     {
         Interlocked.Increment(ref _assertionCount);
         if (_emitter == null) return;
@@ -212,27 +204,26 @@ public class WireMockSystem(WireMockSystemOptions options)
                 metadata["http.url"] = input;
             }
         }
+
         if (_server != null) metadata["wiremock.stub_count"] = _server.Mappings.Count().ToString();
         _emitter.ReportSuccess(SystemName, action, input: input, output: output, metadata: metadata);
     }
 
-    private bool EmitFailure(string action, string? input, Exception ex, DateTimeOffset start)
+    private void EmitFailure(string action, string? input, Exception ex)
     {
         Interlocked.Increment(ref _failedCount);
-        if (_emitter != null)
+        if (_emitter == null) return;
+        var metadata = new Dictionary<string, string>();
+        if (input != null)
         {
-            var metadata = new Dictionary<string, string>();
-            if (input != null)
+            var spaceIdx = input.IndexOf(' ');
+            if (spaceIdx > 0)
             {
-                var spaceIdx = input.IndexOf(' ');
-                if (spaceIdx > 0)
-                {
-                    metadata["http.method"] = input[..spaceIdx];
-                    metadata["http.url"] = input[(spaceIdx + 1)..];
-                }
+                metadata["http.method"] = input[..spaceIdx];
+                metadata["http.url"] = input[(spaceIdx + 1)..];
             }
-            _emitter.ReportFailure(SystemName, action, ex, input: input, metadata: metadata);
         }
-        return false;
+
+        _emitter.ReportFailure(SystemName, action, ex, input: input, metadata: metadata);
     }
 }

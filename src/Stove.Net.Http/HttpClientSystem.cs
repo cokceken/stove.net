@@ -15,7 +15,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
 {
     private const string SystemName = "Http";
     private const int MaxBodyCaptureSize = 4096;
-    private static readonly JsonSerializerOptions s_webJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SWebJsonOptions = new(JsonSerializerDefaults.Web);
 
     private HttpClient? _httpClient;
     private IStoveEventEmitter? _emitter;
@@ -41,20 +41,24 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             ApplyHeaders(request, headers, token);
             var response = await Client.SendAsync(request);
             var responseStr = await response.Content.ReadAsStringAsync();
-            var body = JsonSerializer.Deserialize<TResponse>(responseStr, s_webJsonOptions)
+            var body = JsonSerializer.Deserialize<TResponse>(responseStr, SWebJsonOptions)
                        ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(body);
-            Emit("GET", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("GET", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("GET", url, ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("GET", url, ex);
+            throw;
+        }
+
         return this;
     }
 
@@ -63,7 +67,6 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -71,10 +74,15 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             var response = await Client.SendAsync(request);
             validate?.Invoke(response);
             var responseStr = IsTextContent(response) ? await response.Content.ReadAsStringAsync() : null;
-            Emit("GET", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("GET", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("GET", url, ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("GET", url, ex);
+            throw;
+        }
+
         return this;
     }
 
@@ -84,32 +92,37 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             ApplyHeaders(request, headers, token);
             var response = await Client.SendAsync(request);
             var responseStr = await response.Content.ReadAsStringAsync();
-            var body = JsonSerializer.Deserialize<List<TResponse>>(responseStr, s_webJsonOptions)
-                       ?? throw new InvalidOperationException($"Failed to deserialize to List<{typeof(TResponse).Name}>");
+            var body = JsonSerializer.Deserialize<List<TResponse>>(responseStr, SWebJsonOptions)
+                       ?? throw new InvalidOperationException(
+                           $"Failed to deserialize to List<{typeof(TResponse).Name}>");
             validate?.Invoke(body);
-            Emit("GET", url, $"{(int)response.StatusCode} {response.StatusCode} [{body.Count} item(s)]", start,
+            Emit("GET", url, $"{(int)response.StatusCode} {response.StatusCode} [{body.Count} item(s)]",
                 request, response, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("GET", url, ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("GET", url, ex);
+            throw;
+        }
+
         return this;
     }
 
     // --- POST ---
 
     public async Task<HttpClientSystem> PostAsync<TResponse>(
-        string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null,
+        string path, object? body = null, Action<TResponse>? validate = null,
+        Dictionary<string, string>? headers = null,
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
-        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, s_webJsonOptions)) : null;
+        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, SWebJsonOptions)) : null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -117,23 +130,29 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             if (body != null) request.Content = JsonContent.Create(body);
             var response = await Client.SendAsync(request);
             var responseStr = await response.Content.ReadAsStringAsync();
-            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, s_webJsonOptions)
-                               ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, SWebJsonOptions)
+                               ?? throw new InvalidOperationException(
+                                   $"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(responseBody);
-            Emit("POST", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("POST", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, requestBody: requestBodyStr, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("POST", url, ex, start, requestBodyStr)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("POST", url, ex, requestBodyStr);
+            throw;
+        }
+
         return this;
     }
 
     public async Task<HttpClientSystem> PostAsync(
-        string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null,
+        string path, object? body = null, Action<HttpResponseMessage>? validate = null,
+        Dictionary<string, string>? headers = null,
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
-        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, s_webJsonOptions)) : null;
+        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, SWebJsonOptions)) : null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -142,10 +161,15 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             var response = await Client.SendAsync(request);
             validate?.Invoke(response);
             var responseStr = IsTextContent(response) ? await response.Content.ReadAsStringAsync() : null;
-            Emit("POST", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("POST", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, requestBody: requestBodyStr, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("POST", url, ex, start, requestBodyStr)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("POST", url, ex, requestBodyStr);
+            throw;
+        }
+
         return this;
     }
 
@@ -154,7 +178,6 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         string path, IEnumerable<StoveMultiPartContent> parts, Action<TResponse>? validate = null,
         Dictionary<string, string>? headers = null, string? token = null)
     {
-        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, path);
@@ -173,21 +196,29 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
                     case StoveMultiPartContent.File file:
                         var stream = new StreamContent(file.Stream);
                         if (file.ContentType != null)
-                            stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                            stream.Headers.ContentType =
+                                new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
                         content.Add(stream, file.Name, file.FileName);
                         break;
                 }
             }
+
             request.Content = content;
             var response = await Client.SendAsync(request);
             var responseStr = await response.Content.ReadAsStringAsync();
-            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, s_webJsonOptions)
-                               ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, SWebJsonOptions)
+                               ?? throw new InvalidOperationException(
+                                   $"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(responseBody);
-            Emit("POST (multipart)", path, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("POST (multipart)", path, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("POST (multipart)", path, ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("POST (multipart)", path, ex);
+            throw;
+        }
+
         return this;
     }
 
@@ -196,7 +227,6 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         string path, IEnumerable<StoveMultiPartContent> parts, Action<HttpResponseMessage>? validate = null,
         Dictionary<string, string>? headers = null, string? token = null)
     {
-        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, path);
@@ -215,31 +245,38 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
                     case StoveMultiPartContent.File file:
                         var stream = new StreamContent(file.Stream);
                         if (file.ContentType != null)
-                            stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                            stream.Headers.ContentType =
+                                new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
                         content.Add(stream, file.Name, file.FileName);
                         break;
                 }
             }
+
             request.Content = content;
             var response = await Client.SendAsync(request);
             validate?.Invoke(response);
             var responseStr = IsTextContent(response) ? await response.Content.ReadAsStringAsync() : null;
-            Emit("POST (multipart)", path, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("POST (multipart)", path, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("POST (multipart)", path, ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("POST (multipart)", path, ex);
+            throw;
+        }
+
         return this;
     }
 
     // --- PUT ---
 
     public async Task<HttpClientSystem> PutAsync<TResponse>(
-        string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null,
+        string path, object? body = null, Action<TResponse>? validate = null,
+        Dictionary<string, string>? headers = null,
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
-        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, s_webJsonOptions)) : null;
+        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, SWebJsonOptions)) : null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Put, url);
@@ -247,23 +284,29 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             if (body != null) request.Content = JsonContent.Create(body);
             var response = await Client.SendAsync(request);
             var responseStr = await response.Content.ReadAsStringAsync();
-            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, s_webJsonOptions)
-                               ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, SWebJsonOptions)
+                               ?? throw new InvalidOperationException(
+                                   $"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(responseBody);
-            Emit("PUT", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("PUT", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, requestBody: requestBodyStr, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("PUT", url, ex, start, requestBodyStr)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("PUT", url, ex, requestBodyStr);
+            throw;
+        }
+
         return this;
     }
 
     public async Task<HttpClientSystem> PutAsync(
-        string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null,
+        string path, object? body = null, Action<HttpResponseMessage>? validate = null,
+        Dictionary<string, string>? headers = null,
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
-        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, s_webJsonOptions)) : null;
+        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, SWebJsonOptions)) : null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Put, url);
@@ -272,10 +315,15 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             var response = await Client.SendAsync(request);
             validate?.Invoke(response);
             var responseStr = IsTextContent(response) ? await response.Content.ReadAsStringAsync() : null;
-            Emit("PUT", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("PUT", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, requestBody: requestBodyStr, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("PUT", url, ex, start, requestBodyStr)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("PUT", url, ex, requestBodyStr);
+            throw;
+        }
+
         return this;
     }
 
@@ -286,20 +334,24 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Delete, url);
             ApplyHeaders(request, headers, token);
             var response = await Client.SendAsync(request);
             var responseStr = await response.Content.ReadAsStringAsync();
-            var body = JsonSerializer.Deserialize<TResponse>(responseStr, s_webJsonOptions)
+            var body = JsonSerializer.Deserialize<TResponse>(responseStr, SWebJsonOptions)
                        ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(body);
-            Emit("DELETE", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("DELETE", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("DELETE", url, ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("DELETE", url, ex);
+            throw;
+        }
+
         return this;
     }
 
@@ -308,7 +360,6 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Delete, url);
@@ -316,22 +367,27 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             var response = await Client.SendAsync(request);
             validate?.Invoke(response);
             var responseStr = IsTextContent(response) ? await response.Content.ReadAsStringAsync() : null;
-            Emit("DELETE", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("DELETE", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("DELETE", url, ex, start)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("DELETE", url, ex);
+            throw;
+        }
+
         return this;
     }
 
     // --- PATCH ---
 
     public async Task<HttpClientSystem> PatchAsync<TResponse>(
-        string path, object? body = null, Action<TResponse>? validate = null, Dictionary<string, string>? headers = null,
+        string path, object? body = null, Action<TResponse>? validate = null,
+        Dictionary<string, string>? headers = null,
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
-        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, s_webJsonOptions)) : null;
+        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, SWebJsonOptions)) : null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Patch, url);
@@ -339,23 +395,29 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             if (body != null) request.Content = JsonContent.Create(body);
             var response = await Client.SendAsync(request);
             var responseStr = await response.Content.ReadAsStringAsync();
-            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, s_webJsonOptions)
-                               ?? throw new InvalidOperationException($"Failed to deserialize to {typeof(TResponse).Name}");
+            var responseBody = JsonSerializer.Deserialize<TResponse>(responseStr, SWebJsonOptions)
+                               ?? throw new InvalidOperationException(
+                                   $"Failed to deserialize to {typeof(TResponse).Name}");
             validate?.Invoke(responseBody);
-            Emit("PATCH", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("PATCH", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, requestBody: requestBodyStr, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("PATCH", url, ex, start, requestBodyStr)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("PATCH", url, ex, requestBodyStr);
+            throw;
+        }
+
         return this;
     }
 
     public async Task<HttpClientSystem> PatchAsync(
-        string path, object? body = null, Action<HttpResponseMessage>? validate = null, Dictionary<string, string>? headers = null,
+        string path, object? body = null, Action<HttpResponseMessage>? validate = null,
+        Dictionary<string, string>? headers = null,
         Dictionary<string, string>? queryParams = null, string? token = null)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
-        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, s_webJsonOptions)) : null;
+        var requestBodyStr = body != null ? TruncateForCapture(JsonSerializer.Serialize(body, SWebJsonOptions)) : null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Patch, url);
@@ -364,10 +426,15 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             var response = await Client.SendAsync(request);
             validate?.Invoke(response);
             var responseStr = IsTextContent(response) ? await response.Content.ReadAsStringAsync() : null;
-            Emit("PATCH", url, $"{(int)response.StatusCode} {response.StatusCode}", start,
+            Emit("PATCH", url, $"{(int)response.StatusCode} {response.StatusCode}",
                 request, response, requestBody: requestBodyStr, responseBody: TruncateForCapture(responseStr));
         }
-        catch (Exception ex) when (EmitFailure("PATCH", url, ex, start, requestBodyStr)) { }
+        catch (Exception ex)
+        {
+            EmitFailure("PATCH", url, ex, requestBodyStr);
+            throw;
+        }
+
         return this;
     }
 
@@ -383,29 +450,29 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var url = BuildUrl(path, queryParams);
-        var start = DateTimeOffset.UtcNow;
         var count = 0;
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         ApplyHeaders(request, headers, token);
-        using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var response =
+            await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
 
-        string? line;
-        while ((line = await reader.ReadLineAsync(cancellationToken)) != null
+        while (await reader.ReadLineAsync(cancellationToken) is { } line
                && !cancellationToken.IsCancellationRequested)
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
 
             var item = JsonSerializer.Deserialize<TResponse>(line)
-                       ?? throw new InvalidOperationException($"Failed to deserialize stream line to {typeof(TResponse).Name}");
+                       ?? throw new InvalidOperationException(
+                           $"Failed to deserialize stream line to {typeof(TResponse).Name}");
             count++;
             yield return item;
         }
 
-        Emit("GET (stream)", url, $"{(int)response.StatusCode} [{count} item(s)]", start, request, response);
+        Emit("GET (stream)", url, $"{(int)response.StatusCode} [{count} item(s)]", request, response);
     }
 
     // --- Helpers ---
@@ -425,6 +492,7 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             sb.Append(Uri.EscapeDataString(value));
             first = false;
         }
+
         return sb.ToString();
     }
 
@@ -485,11 +553,13 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
                 ? "[redacted]"
                 : string.Join(", ", h.Value);
         }
+
         if (contentHeaders != null)
         {
             foreach (var h in contentHeaders)
                 dict[h.Key] = string.Join(", ", h.Value);
         }
+
         return JsonSerializer.Serialize(dict);
     }
 
@@ -502,9 +572,8 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
                || mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void Emit(string action, string? url, string? statusLine, DateTimeOffset start,
-        HttpRequestMessage? request = null, HttpResponseMessage? response = null,
-        string? requestBody = null, string? responseBody = null)
+    private void Emit(string action, string? url, string? statusLine, HttpRequestMessage? request = null,
+        HttpResponseMessage? response = null, string? requestBody = null, string? responseBody = null)
     {
         Interlocked.Increment(ref _requestCount);
         if (_emitter == null) return;
@@ -530,35 +599,36 @@ public class HttpClientSystem : IPluggedSystem, IStoveReportingSystem, IReportsS
             var spaceIdx = statusLine.IndexOf(' ');
             if (spaceIdx > 0) metadata["http.status_code"] = statusLine[..spaceIdx];
         }
+
         if (requestBody != null) metadata["http.request_body"] = requestBody;
         if (responseBody != null) metadata["http.response_body"] = responseBody;
-        if (request != null) metadata["http.request_headers"] = SerializeHeaders(request.Headers, request.Content?.Headers);
-        if (response != null) metadata["http.response_headers"] = SerializeHeaders(response.Headers, response.Content?.Headers);
+        if (request != null)
+            metadata["http.request_headers"] = SerializeHeaders(request.Headers, request.Content?.Headers);
+        if (response != null)
+            metadata["http.response_headers"] = SerializeHeaders(response.Headers, response.Content?.Headers);
 
         _emitter.ReportSuccess(SystemName, action, input: richInput, output: richOutput, metadata: metadata);
     }
 
-    private bool EmitFailure(string action, string? url, Exception ex, DateTimeOffset start,
+    private void EmitFailure(string action, string? url, Exception ex,
         string? requestBody = null)
     {
         Interlocked.Increment(ref _failedCount);
-        if (_emitter != null)
+        if (_emitter == null) return;
+
+        // Build rich input even on failure
+        var inputParts = new List<string> { $"{action} {url}" };
+        if (requestBody != null) inputParts.Add(requestBody);
+        var richInput = string.Join("\n", inputParts);
+
+        var metadata = new Dictionary<string, string>
         {
-            // Build rich input even on failure
-            var inputParts = new List<string> { $"{action} {url}" };
-            if (requestBody != null) inputParts.Add(requestBody);
-            var richInput = string.Join("\n", inputParts);
+            ["http.method"] = action,
+            ["http.url"] = url ?? string.Empty
+        };
+        if (requestBody != null) metadata["http.request_body"] = requestBody;
 
-            var metadata = new Dictionary<string, string>
-            {
-                ["http.method"] = action,
-                ["http.url"] = url ?? string.Empty
-            };
-            if (requestBody != null) metadata["http.request_body"] = requestBody;
-
-            _emitter.ReportFailure(SystemName, action, ex, input: richInput, metadata: metadata);
-        }
-        return false;
+        _emitter.ReportFailure(SystemName, action, ex, input: richInput, metadata: metadata);
     }
 
     public ValueTask DisposeAsync()
