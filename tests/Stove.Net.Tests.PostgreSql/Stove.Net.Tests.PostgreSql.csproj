@@ -8,6 +8,7 @@
         <IsTestProject>true</IsTestProject>
         <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
         <OutputType>Exe</OutputType>
+        <EnableMicrosoftTestingPlatform>true</EnableMicrosoftTestingPlatform>
     </PropertyGroup>
 
     <ItemGroup>
