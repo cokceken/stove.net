@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Stove.Net.Core;
+using Stove.Net.Core.Logging;
 using Stove.Net.Http;
 using Stove.Net.PostgreSql;
 using Stove.Net.Tests.ExampleApp;
@@ -22,6 +24,9 @@ public class IntegrationFixture : IAsyncLifetime
 {
     private WebApplicationFactory<Program>? _factory;
     private StoveInstance? _stove;
+
+    /// <summary>Captures application logs for inclusion in failure reports.</summary>
+    public StoveLogCapture LogCapture { get; } = new();
 
     public StoveInstance Stove => _stove
                                   ?? throw new InvalidOperationException(
@@ -51,7 +56,8 @@ public class IntegrationFixture : IAsyncLifetime
                     new KeyValuePair<string, string>(
                         "ExternalApis:NotificationUrl", url)
                 ];
-            });
+            })
+            .WithLogCapture(LogCapture);
 
         _stove = await builder.RunAsync();
 
@@ -64,6 +70,13 @@ public class IntegrationFixture : IAsyncLifetime
                 {
                     if (stoveConfig.Count > 0)
                         config.AddInMemoryCollection(stoveConfig!);
+                });
+                webBuilder.ConfigureServices(services =>
+                {
+                    services.AddLogging(logging =>
+                    {
+                        logging.AddProvider(LogCapture.CreateProvider());
+                    });
                 });
             });
 

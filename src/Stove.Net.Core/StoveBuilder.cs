@@ -1,3 +1,4 @@
+using Stove.Net.Core.Logging;
 using Stove.Net.Core.Reporting;
 
 namespace Stove.Net.Core;
@@ -38,9 +39,21 @@ public sealed class StoveBuilder
         return this;
     }
 
+    /// <summary>
+    /// Register a <see cref="StoveLogCapture"/> for capturing application logs in failure reports.
+    /// Call <c>LogCapture.CreateProvider()</c> and add it to the WebApplicationFactory's logging.
+    /// </summary>
+    public StoveBuilder WithLogCapture(StoveLogCapture logCapture)
+    {
+        Instance.LogCapture = logCapture;
+        return this;
+    }
+
     /// <summary>Start all registered systems and return the configured Stove instance.</summary>
     public async Task<StoveInstance> RunAsync()
     {
+        // Auto-register StoveReporter so failure reports work out of the box
+        Instance.InitializeReporter();
         await Instance.RunSystemsAsync();
         return Instance;
     }

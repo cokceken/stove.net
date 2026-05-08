@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Stove.Net.Core.Exceptions;
+using Stove.Net.Core.Logging;
 using Stove.Net.Core.Reporting;
 
 namespace Stove.Net.Core;
@@ -51,6 +52,16 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     private int _passedTests;
     private int _failedTests;
     private DateTimeOffset _runStartedAt = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Optional log capture for application logs. Set via StoveBuilder.WithLogCapture().
+    /// </summary>
+    internal StoveLogCapture? LogCapture { get; set; }
+
+    /// <summary>
+    /// The auto-registered reporter. Null if not yet initialized.
+    /// </summary>
+    internal StoveReporter? Reporter { get; private set; }
 
     // ---- IStoveEventEmitter ----
 
@@ -106,6 +117,17 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
     /// </summary>
     public void AddListener(IStoveEventListener listener) => _listeners.Add(listener);
 
+    /// <summary>
+    /// Initialize the auto-registered StoveReporter.
+    /// Called by StoveBuilder.RunAsync() before systems start.
+    /// </summary>
+    internal void InitializeReporter()
+    {
+        var reporter = new StoveReporter();
+        Reporter = reporter;
+        _listeners.Add(reporter);
+    }
+
     // ---- Test lifecycle ----
 
     /// <summary>
@@ -119,6 +141,10 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         AsyncTestStartedAt.Value = DateTimeOffset.UtcNow;
         Interlocked.Increment(ref _totalTests);
         Activity.Current?.AddBaggage(StoveTestIdHeaderName, testId);
+
+        // Correlate app log capture with this test
+        LogCapture?.SetTestId(testId);
+
         foreach (var listener in _listeners)
             listener.OnTestStarted(testId, testName, specName, testPath);
     }
@@ -154,6 +180,9 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
         foreach (var listener in _listeners)
             listener.OnTestEnded(testId, duration, error);
+
+        // Clear app log capture correlation
+        LogCapture?.ClearTestId();
         AsyncTestId.Value = string.Empty;
     }
 
@@ -256,6 +285,14 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
 
         foreach (var system in _systems.Values)
             await system.RunAsync();
+
+        // Wire reporter with log sources now that all systems are registered
+        if (Reporter is not null)
+        {
+            Reporter.LogSources = _systems.Values.OfType<ICollectsLogs>().ToList();
+            if (LogCapture is not null)
+                Reporter.AppLogProvider = testId => LogCapture.GetLogs(testId);
+        }
 
         // Fire OnRunStarted AFTER all systems have started — this ensures
         // listener systems (e.g., DashboardSystem) have their infrastructure

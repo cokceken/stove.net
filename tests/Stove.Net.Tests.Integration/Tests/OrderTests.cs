@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
+using Stove.Net.Core.Testing;
 using Stove.Net.Http;
 using Stove.Net.PostgreSql;
 using Stove.Net.Tests.ExampleApp;
@@ -12,14 +13,14 @@ namespace Stove.Net.Tests.Integration.Tests;
 /// <summary>
 /// Integration tests combining HTTP + PostgreSQL + WireMock systems.
 /// Validates end-to-end flows through a real API, database, and mock server.
-/// Framework-agnostic — uses standard xUnit patterns, not Stove-specific base classes.
+/// Uses StoveTestBase for convenience — Validate() and CleanupAsync() are inherited.
 /// </summary>
 public class OrderTests(IntegrationFixture fixture)
-    : IClassFixture<IntegrationFixture>, IAsyncLifetime
+    : StoveTestBase(fixture.Stove), IClassFixture<IntegrationFixture>, IAsyncLifetime
 {
     public async ValueTask InitializeAsync()
     {
-        await fixture.Stove.CleanupAsync();
+        await CleanupAsync();
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -27,7 +28,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {
-        await fixture.Stove.Validate(async s =>
+        await Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -73,7 +74,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_return_404_for_nonexistent_order()
     {
-        await fixture.Stove.Validate(async s =>
+        await Validate(async s =>
         {
             await s.Http(async http =>
             {
@@ -86,7 +87,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_get_order_by_id()
     {
-        await fixture.Stove.Validate(async s =>
+        await Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -119,7 +120,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_remove_cached_order_on_delete()
     {
-        await fixture.Stove.Validate(async s =>
+        await Validate(async s =>
         {
             Order? createdOrder = null;
 
