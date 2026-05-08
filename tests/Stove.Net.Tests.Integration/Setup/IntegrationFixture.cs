@@ -82,10 +82,6 @@ public class IntegrationFixture : IAsyncLifetime
 
         _stove.GetSystem<HttpClientSystem>().SetHttpClient(_factory.CreateClient());
 
-        Stove.GetSystem<WireMockSystem>().Stub(
-            Request.Create().WithPath("/api/notifications").UsingPost(),
-            Response.Create().WithStatusCode(202));
-
         using var scope = _factory.Services.CreateScope();
         await _stove.NotifyAfterRunAsync(scope.ServiceProvider);
 

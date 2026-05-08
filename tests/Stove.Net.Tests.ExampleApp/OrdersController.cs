@@ -1,8 +1,5 @@
-using System.Text.Json;
-using Confluent.Kafka;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using StackExchange.Redis;
 
 namespace Stove.Net.Tests.ExampleApp;
 
@@ -11,6 +8,7 @@ namespace Stove.Net.Tests.ExampleApp;
 public class OrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
+
     // private readonly ProducerConfig _kafkaConfig;
     // private readonly IDatabase? _redis;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -54,7 +52,6 @@ public class OrdersController : ControllerBase
         _db.Orders.Add(order);
         await _db.SaveChangesAsync();
 
-        
         // Notify external service
         try
         {
@@ -67,8 +64,6 @@ public class OrdersController : ControllerBase
             // Notification failure shouldn't break order creation
         }
 
-       
-
         return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
     }
 
@@ -80,8 +75,6 @@ public class OrdersController : ControllerBase
 
         _db.Orders.Remove(order);
         await _db.SaveChangesAsync();
-
-        
 
         return NoContent();
     }

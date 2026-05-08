@@ -5,6 +5,8 @@ using Stove.Net.PostgreSql;
 using Stove.Net.Tests.ExampleApp;
 using Stove.Net.Tests.Integration.Setup;
 using Stove.Net.WireMock;
+using WireMock.RequestBuilders;
+using WireMock.ResponseBuilders;
 using Xunit;
 
 namespace Stove.Net.Tests.Integration.Tests;
@@ -19,6 +21,10 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {
+        fixture.Stove.GetSystem<WireMockSystem>().Stub(
+            Request.Create().WithPath("/api/notifications").UsingPost(),
+            Response.Create().WithStatusCode(202));
+        
         await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
@@ -78,6 +84,10 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_get_order_by_id()
     {
+        fixture.Stove.GetSystem<WireMockSystem>().Stub(
+            Request.Create().WithPath("/api/notifications").UsingPost(),
+            Response.Create().WithStatusCode(202));
+        
         await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
@@ -111,6 +121,10 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_remove_cached_order_on_delete()
     {
+        fixture.Stove.GetSystem<WireMockSystem>().Stub(
+            Request.Create().WithPath("/api/notifications").UsingPost(),
+            Response.Create().WithStatusCode(202));
+        
         await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
