@@ -91,11 +91,8 @@ public class MyFixture : IAsyncLifetime
 ## Test Class Pattern
 
 ```csharp
-public class OrderTests(MyFixture fixture) : IClassFixture<MyFixture>, IAsyncLifetime
+public class OrderTests(MyFixture fixture) : IClassFixture<MyFixture>
 {
-    public async ValueTask InitializeAsync() => await fixture.Stove.CleanupAsync();
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
     [Fact]
     public async Task Should_create_order()
     {

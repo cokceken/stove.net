@@ -14,14 +14,8 @@ namespace Stove.Net.Tests.Integration.Tests;
 /// Validates end-to-end flows through a real API, database, and mock server.
 /// </summary>
 public class OrderTests(IntegrationFixture fixture)
-    : IClassFixture<IntegrationFixture>, IAsyncLifetime
+    : IClassFixture<IntegrationFixture>
 {
-    public async ValueTask InitializeAsync()
-    {
-        await fixture.Stove.CleanupAsync();
-    }
-
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()

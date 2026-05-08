@@ -326,6 +326,10 @@ public sealed class StoveInstance : IAsyncDisposable, IStoveEventEmitter
         Func<ValidationDsl, Task> validation,
         [CallerMemberName] string callerName = "")
     {
+        // Reset system state (e.g., WireMock request logs) so each test starts clean
+        foreach (var system in _systems.Values)
+            await system.CleanupAsync();
+
         var testId = Guid.NewGuid().ToString("N")[..16];
         var traceId = Guid.NewGuid().ToString("N");
         var prevTraceId = AsyncTraceId.Value;
