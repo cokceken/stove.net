@@ -5,7 +5,6 @@
 Stove.Net is currently **coupled to xUnit v3** through the `Stove.Net.Xunit` project, which provides:
 
 - **`StoveFixture<TProgram>`**: Extends `WebApplicationFactory<TProgram>` + implements xUnit's `IAsyncLifetime`. Boots the ASP.NET app in-process, configures Stove systems, and auto-injects log/body/trace capture into the app pipeline.
-- **`StoveTestBase<TFixture>`**: Abstract test base class implementing xUnit's `IAsyncLifetime`. Tracks test ID and pass/fail status, calls `Stove.NotifyTestStarted/NotifyTestEnded`, and extracts test metadata from xUnit's `TestContext`.
 - **`StoveLoggerProvider` / `StoveLogger`**: Captures `ILogger` output by injecting into the app's logging pipeline.
 - **`StoveBodyCaptureMiddleware`**: ASP.NET Core middleware injected via `IStartupFilter` to capture HTTP request/response bodies.
 

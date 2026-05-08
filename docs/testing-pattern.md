@@ -90,8 +90,6 @@ public class MyFixture : IAsyncLifetime
 
 ## Test Class Pattern
 
-### Without `StoveTestBase` (explicit)
-
 ```csharp
 public class OrderTests(MyFixture fixture) : IClassFixture<MyFixture>, IAsyncLifetime
 {
@@ -121,28 +119,6 @@ public class OrderTests(MyFixture fixture) : IClassFixture<MyFixture>, IAsyncLif
             {
                 wm.ShouldHaveReceived("/api/notifications", "POST");
             });
-        });
-    }
-}
-```
-
-### With `StoveTestBase` (convenience)
-
-`StoveTestBase` exposes `Validate` and `CleanupAsync` directly so you don't need to go through the fixture each time.
-
-```csharp
-public class OrderTests(MyFixture fixture)
-    : StoveTestBase(fixture.Stove), IClassFixture<MyFixture>, IAsyncLifetime
-{
-    public async ValueTask InitializeAsync() => await CleanupAsync();
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    [Fact]
-    public async Task Should_create_order()
-    {
-        await Validate(async s =>
-        {
-            // Same validation body as above
         });
     }
 }

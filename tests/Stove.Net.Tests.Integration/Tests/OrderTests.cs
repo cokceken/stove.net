@@ -1,6 +1,5 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
-using Stove.Net.Core.Testing;
 using Stove.Net.Http;
 using Stove.Net.PostgreSql;
 using Stove.Net.Tests.ExampleApp;
@@ -13,14 +12,13 @@ namespace Stove.Net.Tests.Integration.Tests;
 /// <summary>
 /// Integration tests combining HTTP + PostgreSQL + WireMock systems.
 /// Validates end-to-end flows through a real API, database, and mock server.
-/// Uses StoveTestBase for convenience — Validate() and CleanupAsync() are inherited.
 /// </summary>
 public class OrderTests(IntegrationFixture fixture)
-    : StoveTestBase(fixture.Stove), IClassFixture<IntegrationFixture>, IAsyncLifetime
+    : IClassFixture<IntegrationFixture>, IAsyncLifetime
 {
     public async ValueTask InitializeAsync()
     {
-        await CleanupAsync();
+        await fixture.Stove.CleanupAsync();
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -28,7 +26,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {
-        await Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -74,7 +72,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_return_404_for_nonexistent_order()
     {
-        await Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             await s.Http(async http =>
             {
@@ -87,7 +85,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_get_order_by_id()
     {
-        await Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
@@ -120,7 +118,7 @@ public class OrderTests(IntegrationFixture fixture)
     [Fact]
     public async Task Should_remove_cached_order_on_delete()
     {
-        await Validate(async s =>
+        await fixture.Stove.Validate(async s =>
         {
             Order? createdOrder = null;
 
