@@ -28,14 +28,13 @@ public sealed record TestReport
 }
 
 /// <summary>
-/// Renders a formatted console report for failed tests.
-/// Inspired by Kotlin Stove's PrettyConsoleRenderer.
+/// Renders a plain-text structured report for failed tests.
+/// No ASCII box-drawing — just clear sections with full, untruncated data.
 /// </summary>
 public static class ConsoleReportRenderer
 {
-    private const int BoxWidth = 78;
-    private const int MaxFieldLength = 500;
     private const string ContainerPrefix = "Container:";
+    private const string Separator = "---";
 
     /// <summary>
     /// Render a failure report for a single test.
@@ -45,35 +44,14 @@ public static class ConsoleReportRenderer
     {
         var sb = new StringBuilder();
 
-        RenderHeader(sb);
-        RenderTestBox(sb, report);
-
-        return sb.ToString();
-    }
-
-    private static void RenderHeader(StringBuilder sb)
-    {
-        var rule = new string('═', BoxWidth);
-        sb.AppendLine(rule);
-        sb.AppendLine(CenterText("STOVE EXECUTION REPORT", BoxWidth));
-        sb.AppendLine(rule);
         sb.AppendLine();
-    }
-
-    private static void RenderTestBox(StringBuilder sb, TestReport report)
-    {
-        var topBorder = "╔" + new string('═', BoxWidth) + "╗";
-        var separator = "╠" + new string('═', BoxWidth) + "╣";
-        var bottomBorder = "╚" + new string('═', BoxWidth) + "╝";
-
-        sb.AppendLine(topBorder);
-        RenderBoxLine(sb, $"Test: {report.SpecName}::{report.TestName}");
-        RenderBoxLine(sb, $"Duration: {report.Duration.TotalSeconds:F3}s");
+        sb.AppendLine("=== STOVE EXECUTION REPORT ===");
+        sb.AppendLine();
+        sb.AppendLine($"Test: {report.SpecName}::{report.TestName}");
+        sb.AppendLine($"Duration: {report.Duration.TotalSeconds:F3}s");
 
         if (!string.IsNullOrEmpty(report.Error))
-        {
-            RenderBoxLine(sb, $"Error: {Truncate(report.Error, BoxWidth - 10)}");
-        }
+            sb.AppendLine($"Error: {report.Error}");
 
         // Timeline
         var timelineEntries = report.Entries
@@ -83,145 +61,93 @@ public static class ConsoleReportRenderer
 
         if (timelineEntries.Count > 0)
         {
-            sb.AppendLine(separator);
-            RenderEmptyBoxLine(sb);
-            RenderBoxLine(sb, "── Timeline ──");
-            RenderEmptyBoxLine(sb);
+            sb.AppendLine();
+            sb.AppendLine(Separator);
+            sb.AppendLine("Timeline:");
+            sb.AppendLine(Separator);
 
             foreach (var entry in timelineEntries)
-            {
                 RenderTimelineEntry(sb, entry);
-            }
         }
 
         // Snapshots
         if (report.Snapshots.Count > 0)
         {
-            sb.AppendLine(separator);
-            RenderEmptyBoxLine(sb);
-            RenderBoxLine(sb, "── System Snapshots ──");
-            RenderEmptyBoxLine(sb);
+            sb.AppendLine(Separator);
+            sb.AppendLine("System Snapshots:");
+            sb.AppendLine(Separator);
 
             foreach (var snapshot in report.Snapshots)
-            {
                 RenderSnapshot(sb, snapshot);
-            }
         }
 
         // Application Logs
         if (report.ApplicationLogs.Count > 0)
         {
-            sb.AppendLine(separator);
-            RenderEmptyBoxLine(sb);
-            RenderBoxLine(sb, "── Application Logs ──");
-            RenderEmptyBoxLine(sb);
+            sb.AppendLine(Separator);
+            sb.AppendLine("Application Logs:");
+            sb.AppendLine(Separator);
 
             foreach (var log in report.ApplicationLogs)
             {
                 var time = log.Timestamp.ToString("HH:mm:ss.fff");
                 var level = MapLogLevel(log.Level);
-                RenderBoxLine(sb, $"{time} [{level}] {log.Category}: {log.Message}");
+                sb.AppendLine($"  {time} [{level}] {log.Category}: {log.Message}");
             }
-
-            RenderEmptyBoxLine(sb);
         }
 
         // Container Logs
         if (report.ContainerLogs.Count > 0)
         {
-            sb.AppendLine(separator);
-            RenderEmptyBoxLine(sb);
-            RenderBoxLine(sb, "── Container Logs ──");
-            RenderEmptyBoxLine(sb);
+            sb.AppendLine(Separator);
+            sb.AppendLine("Container Logs:");
+            sb.AppendLine(Separator);
 
             foreach (var log in report.ContainerLogs)
             {
                 var time = log.Timestamp.ToString("HH:mm:ss.fff");
-                RenderBoxLine(sb, $"[{log.Source}] {time} {Truncate(log.Message, BoxWidth - log.Source.Length - 18)}");
+                sb.AppendLine($"  [{log.Source}] {time} {log.Message}");
             }
-
-            RenderEmptyBoxLine(sb);
         }
 
-        sb.AppendLine(bottomBorder);
+        sb.AppendLine();
+        sb.AppendLine("=== END STOVE REPORT ===");
+
+        return sb.ToString();
     }
 
     private static void RenderTimelineEntry(StringBuilder sb, StoveEntry entry)
     {
         var time = entry.Timestamp.ToString("HH:mm:ss.fff");
-        var marker = entry.IsSuccess ? "✓" : "✗";
+        var marker = entry.IsSuccess ? "OK" : "FAIL";
 
-        RenderBoxLine(sb, $"{time} {marker} [{entry.System}] {entry.Action}");
+        sb.AppendLine($"  {time} [{marker}] [{entry.System}] {entry.Action}");
 
         if (!string.IsNullOrEmpty(entry.Input))
-            RenderBoxLine(sb, $"    Input: {Truncate(entry.Input, MaxFieldLength)}");
+            sb.AppendLine($"    Input: {entry.Input}");
 
         if (!string.IsNullOrEmpty(entry.Output))
-            RenderBoxLine(sb, $"    Output: {Truncate(entry.Output, MaxFieldLength)}");
+            sb.AppendLine($"    Output: {entry.Output}");
 
         if (!string.IsNullOrEmpty(entry.Expected))
-            RenderBoxLine(sb, $"    Expected: {Truncate(entry.Expected, MaxFieldLength)}");
+            sb.AppendLine($"    Expected: {entry.Expected}");
 
         if (!string.IsNullOrEmpty(entry.Actual))
-            RenderBoxLine(sb, $"    Actual: {Truncate(entry.Actual, MaxFieldLength)}");
+            sb.AppendLine($"    Actual: {entry.Actual}");
 
         if (!string.IsNullOrEmpty(entry.Error))
-            RenderBoxLine(sb, $"    Error: {Truncate(entry.Error, MaxFieldLength)}");
-
-        RenderEmptyBoxLine(sb);
+            sb.AppendLine($"    Error: {entry.Error}");
     }
 
     private static void RenderSnapshot(StringBuilder sb, StoveSnapshot snapshot)
     {
-        RenderBoxLine(sb, $"┌─ {snapshot.System} " + new string('─', Math.Max(0, BoxWidth - snapshot.System.Length - 6)));
+        sb.AppendLine($"  [{snapshot.System}]");
 
         if (!string.IsNullOrEmpty(snapshot.Summary))
-            RenderBoxLine(sb, $"  {snapshot.Summary}");
+            sb.AppendLine($"    {snapshot.Summary}");
 
         if (!string.IsNullOrEmpty(snapshot.StateJson))
-            RenderBoxLine(sb, $"  State: {Truncate(snapshot.StateJson, MaxFieldLength)}");
-
-        RenderEmptyBoxLine(sb);
-    }
-
-    private static void RenderBoxLine(StringBuilder sb, string content)
-    {
-        // Truncate content to fit within the box if needed
-        var maxContent = BoxWidth - 4; // "║ " + content + " ║"
-        var text = content.Length > maxContent
-            ? content[..(maxContent - 3)] + "..."
-            : content;
-
-        sb.Append("║ ");
-        sb.Append(text);
-        sb.Append(new string(' ', Math.Max(0, BoxWidth - text.Length - 2)));
-        sb.AppendLine("║");
-    }
-
-    private static void RenderEmptyBoxLine(StringBuilder sb)
-    {
-        sb.Append("║");
-        sb.Append(new string(' ', BoxWidth));
-        sb.AppendLine("║");
-    }
-
-    private static string Truncate(string value, int maxLength)
-    {
-        if (maxLength < 4) maxLength = 4;
-
-        // Replace newlines with spaces for single-line display
-        var sanitized = value.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
-
-        return sanitized.Length <= maxLength
-            ? sanitized
-            : sanitized[..(maxLength - 3)] + "...";
-    }
-
-    private static string CenterText(string text, int width)
-    {
-        if (text.Length >= width) return text;
-        var padding = (width - text.Length) / 2;
-        return new string(' ', padding) + text;
+            sb.AppendLine($"    State: {snapshot.StateJson}");
     }
 
     private static string MapLogLevel(string level)

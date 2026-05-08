@@ -16,7 +16,6 @@ namespace Stove.Net.Tests.Integration.Tests;
 public class OrderTests(IntegrationFixture fixture)
     : IClassFixture<IntegrationFixture>
 {
-
     [Fact]
     public async Task Should_create_order_persist_to_database_publish_event_and_cache()
     {
